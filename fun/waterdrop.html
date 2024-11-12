@@ -20,6 +20,7 @@
       background-color: rgba(84, 171, 251, 0.8);
       border-radius: 51% 49% 48% 52% / 62% 44% 56% 38%;
       border: 2px solid #3d93ff;
+      animation: wobble 8s infinite ease-in-out;
     }
     .drop::before {
       content: '';
@@ -31,6 +32,7 @@
       box-shadow: inset -6px 6px 10px #1B6CFB, inset 2px 6px 10px #1a74e5,
                   inset 20px -20px 22px white, inset 40px -40px 44px #a8ceff,
                   -20px 30px 16px #1B6CFB, -40px 60px 32px #1b6cfb;
+      animation: morphing 4s infinite ease-in-out;
     }
     .drop::after {
       content: '';
@@ -42,10 +44,75 @@
       left: 130px;
       top: 40px;
       box-shadow: 16px 40px 0 -10px white;
+      animation: highlight 4s infinite ease-in-out;
+    }
+    @keyframes wobble {
+      0%, 100% {
+        transform: translate(0, 0) scale(1);
+      }
+      25% {
+        transform: translate(-15px, 15px) scale(1.05, 0.95);
+      }
+      50% {
+        transform: translate(15px, -10px) scale(0.95, 1.05);
+      }
+      75% {
+        transform: translate(-10px, -15px) scale(1.02, 0.98);
+      }
+    }
+    @keyframes morphing {
+      0%, 100% {
+        border-radius: 51% 49% 48% 52% / 62% 44% 56% 38%;
+      }
+      25% {
+        border-radius: 45% 55% 52% 48% / 56% 48% 52% 44%;
+      }
+      50% {
+        border-radius: 54% 46% 45% 55% / 48% 52% 48% 52%;
+      }
+      75% {
+        border-radius: 48% 52% 54% 46% / 52% 46% 54% 48%;
+      }
+    }
+    @keyframes highlight {
+      0%, 100% {
+        transform: scale(1) translate(0, 0);
+      }
+      50% {
+        transform: scale(1.1) translate(-5px, 5px);
+      }
     }
   </style>
 </head>
 <body>
   <div class="drop"></div>
+  <script>
+    const drop = document.querySelector('.drop');
+    let isAnimating = true;
+
+    // Add mouse interaction
+    document.addEventListener('mousemove', (e) => {
+      if (!isAnimating) {
+        const rect = drop.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        const deltaX = (e.clientX - centerX) / 50;
+        const deltaY = (e.clientY - centerY) / 50;
+
+        drop.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${1 - Math.abs(deltaX/200)}, ${1 - Math.abs(deltaY/200)})`;
+      }
+    });
+
+    // Toggle animation on click
+    drop.addEventListener('click', () => {
+      isAnimating = !isAnimating;
+      if (isAnimating) {
+        drop.style.animation = 'wobble 8s infinite ease-in-out';
+      } else {
+        drop.style.animation = 'none';
+      }
+    });
+  </script>
 </body>
 </html>
