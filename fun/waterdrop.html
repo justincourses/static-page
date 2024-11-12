@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waterdrop</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #318CFE;
+    }
+    .drop {
+      position: relative;
+      height: 12rem;
+      width: 12rem;
+      background-color: rgba(84, 171, 251, 0.8);
+      border-radius: 51% 49% 48% 52% / 62% 44% 56% 38%;
+      border: 2px solid #3d93ff;
+    }
+    .drop::before {
+      content: '';
+      position: absolute;
+      height: 100%;
+      width: 100%;
+      background-color: rgba(49, 140, 254, 1);
+      border-radius: 51% 49% 48% 52% / 62% 44% 56% 38%;
+      box-shadow: inset -6px 6px 10px #1B6CFB, inset 2px 6px 10px #1a74e5,
+                  inset 20px -20px 22px white, inset 40px -40px 44px #a8ceff,
+                  -20px 30px 16px #1B6CFB, -40px 60px 32px #1b6cfb;
+    }
+    .drop::after {
+      content: '';
+      position: absolute;
+      height: 2.5rem;
+      width: 2.5rem;
+      background-color: rgba(230, 253, 251, 0.8);
+      border-radius: 44% 56% 46% 54% / 36% 50% 50% 64%;
+      left: 130px;
+      top: 40px;
+      box-shadow: 16px 40px 0 -10px white;
+    }
+  </style>
+</head>
+<body>
+  <div class="drop"></div>
+</body>
+</html>
