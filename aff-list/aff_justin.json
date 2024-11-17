@@ -1,0 +1,77 @@
+[
+  {
+    "title": "课程",
+    "items": [
+      {
+        "name": "Web 开发从入门到上线",
+        "description": "由浅入深的 Web 开发全栈课程",
+        "url": "https://www.xiaobot.net/p/indisiteintro?refer=8e34cd7f-0014-4bca-bfbf-ea155de7c005"
+      }
+    ]
+  },
+  {
+    "title": "主机",
+    "items": [
+      {
+        "name": "Racknerd",
+        "description": "虚拟主机、VPS",
+        "url": "https://my.racknerd.com/aff.php?aff=12060"
+      }
+    ]
+  },
+  {
+    "title": "金融",
+    "items": [
+      {
+        "name": "Moomoo",
+        "description": "富途海外独立品牌 moomoo 证券",
+        "url": "https://start.moomoo.com/01yvCv"
+      },
+      {
+        "name": "长桥证券",
+        "description": "港美股终生免佣的香港持牌券商",
+        "url": "https://activity.longbridgehk.com/pipeline/HK_openaccount_deposit/index.html?account_channel=lb&app_id=longbridge&org_id=1&businessType=activity&lbFitsStatusBar=0&channel=HHMS00004&sac=lb&amp%3BbusinessType=activity&amp%3BlbFitsStatusBar=0&amp%3Bchannel=HHMS00004&amp%3Blang=zh-HK&code=YQ1711704757&invite-code=FMOSV5"
+      },
+      {
+        "name": "Wise",
+        "description": "护照可开的海外储蓄卡",
+        "url": "https://wise.com/invite/ihpc/justinc1484"
+      }
+    ]
+  },
+  {
+    "title": "工具",
+    "items": [
+      {
+        "name": "Rewardful",
+        "description": "国际化的佣金平台",
+        "url": "https://www.rewardful.com/?via=justin-chen"
+      },
+      {
+        "name": "Fiverr",
+        "description": "自由职业在线平台",
+        "url": "https://www.fiverr.com/pe/VYNDRVm"
+      }
+    ]
+  },
+  {
+    "title": "娱乐",
+    "items": [
+      {
+        "name": "奈飞小铺",
+        "description": "NF、Disney+、AMZ、Spotify 等影视平台合租",
+        "url": "https://ihezu.fans/GgBeqE"
+      }
+    ]
+  },
+  {
+    "title": "打赏",
+    "items": [
+      {
+        "name": "请咖啡",
+        "description": "请喝一杯咖啡",
+        "url": "https://buymeacoffee.com/interjc"
+      }
+    ]
+  }
+]
