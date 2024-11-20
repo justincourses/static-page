@@ -1,10 +1,35 @@
 [
   {
+    "title": "购物",
+    "items": [
+      {
+        "name": "Amazon",
+        "description": "美亚购物返利",
+        "url": "https://affiliate-program.amazon.com"
+      },
+      {
+        "name": "Amazon JP",
+        "description": "日亚购物返利",
+        "url": "https://affiliate.amazon.co.jp"
+      },
+      {
+        "name": "Lemon Squeezy",
+        "description": "Lemon Squeezy Affiliates",
+        "url": "https://www.lemonsqueezy.com/marketing/affiliates"
+      }
+    ]
+  },
+  {
     "title": "课程",
     "items": [
       {
-        "name": "Web 开发从入门到上线",
-        "description": "由浅入深的 Web 开发全栈课程",
+        "name": "Web 开发从入门到上线（Trackdesk）",
+        "description": "由浅入深的 Web 开发全栈课程（25%）",
+        "url": "https://s.zhaikr.com/c-aff"
+      },
+      {
+        "name": "Web 开发从入门到上线（小报童）",
+        "description": "由浅入深的 Web 开发全栈课程（20%）",
         "url": "https://www.xiaobot.net/p/indisiteintro?refer=8e34cd7f-0014-4bca-bfbf-ea155de7c005"
       }
     ]
