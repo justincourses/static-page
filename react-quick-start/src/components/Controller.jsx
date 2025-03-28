@@ -1,6 +1,6 @@
 export default function Controller({ count, setCount }) {
   return (
-    <div className="card">
+    <div className="controller-bar">
       <button onClick={() => setCount((count) => count + 1)}>
         count is {count}
       </button>
