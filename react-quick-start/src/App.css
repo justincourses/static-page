@@ -42,11 +42,16 @@
 }
 
 .gallery-avatar {
+  margin: 10px;
+  list-style: none;
+  display: inline-block;
+}
+
+.gallery-avatar img {
   width: 100px;
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  margin: 10px;
 }
 
 .gallery-avatar:hover {
