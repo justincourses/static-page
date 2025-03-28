@@ -8,15 +8,7 @@ function App() {
 
   return (
     <>
-      <Gallery count={count} />
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <button onClick={() => setCount(0)}>
-          Reset
-        </button>
-      </div>
+      <Gallery count={count} setCount={setCount} />
     </>
   );
 }
