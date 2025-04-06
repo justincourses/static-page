@@ -1,10 +1,13 @@
 export default function Controller({ count, setCount, maxLength }) {
+  const handleAdd = () => setCount((count) => count + 1)
+  const handleReset = () => setCount(0)
+
   return (
     <div className="controller-bar">
-      <button onClick={() => setCount((count) => count + 1)} disabled={count >= maxLength}>
+      <button onClick={handleAdd} disabled={count >= maxLength}>
         count is {count}
       </button>
-      <button onClick={() => setCount(0)}>Reset</button>
+      <button onClick={handleReset}>Reset</button>
     </div>
   );
 }
