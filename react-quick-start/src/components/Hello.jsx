@@ -1,10 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useImmer } from "use-immer";
 
 export default function Hello({ count }) {
   const [val, setVal] = useImmer({
     count: null,
   })
+
+  const refNum = useRef(0);
 
   const sum = val.count + count
 
@@ -26,6 +28,7 @@ export default function Hello({ count }) {
       <p>Out: {count}</p>
       <p>In: {val.count}</p>
       <p>Sum: {sum}</p>
+      <p>Ref: {refNum.current}</p>
       <button
         onClick={() =>
           setVal((draft) => {
@@ -33,9 +36,10 @@ export default function Hello({ count }) {
           })
         }
       >
-        Add
+        Add Num
       </button>
       <button onClick={handleAlert(val.count)}>Subtract</button>
+      <button onClick={() => refNum.current = refNum.current + 1}>Add Ref</button>
     </>
   );
 }

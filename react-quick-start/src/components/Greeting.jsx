@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from 'react'
 import { useImmer } from "use-immer";
+import NumProvider from '../providers/num';
 
 const sumReducer = (state, action) => {
   switch (action.type) {
@@ -45,6 +46,12 @@ export default function Hello({ count }) {
       <p>Out: {count}</p>
       <p>In: {val.count}</p>
       <p>Sum: {sum}</p>
+      <NumProvider num={1}>ContextNum</NumProvider>
+      <NumProvider num={2}>ContextNum</NumProvider>
+      <NumProvider num={3}>ContextNum</NumProvider>
+      <NumProvider num={4}>ContextNum</NumProvider>
+      <NumProvider num={5}>ContextNum</NumProvider>
+      <NumProvider num={6}>ContextNum</NumProvider>
       <button
         onClick={() => dispatchSum({ type: 'ADD_SUM', payload: { count } })}
       >
