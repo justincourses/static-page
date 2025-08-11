@@ -26,7 +26,7 @@ function handleChoice(nextId) {
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background-color: #f0f0f0;
+  /* 移除背景色，让 app.vue 的渐变色显示 */
   padding: 20px;
 }
 </style>
