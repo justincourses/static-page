@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* 自定义背景渐变色样式 */
+.bg-gradient {
+    background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+}
+
+/* 从上到下的渐变 */
+.bg-gradient-to-b {
+    background: linear-gradient(to bottom, #667eea 0%, #764ba2 100%);
+}
+
+/* 从左到右的渐变 */
+.bg-gradient-to-r {
+    background: linear-gradient(to right, #667eea 0%, #764ba2 100%);
+}
+
+/* 对角线渐变 */
+.bg-gradient-diagonal {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
