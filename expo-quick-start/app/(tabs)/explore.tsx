@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Collapsible } from '@/components/ui/collapsible';
 import { ExternalLink } from '@/components/external-link';
@@ -9,17 +9,21 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Fonts } from '@/constants/theme';
 
+const HEADER_ICON_SIZE = 310;
+
 export default function TabTwoScreen() {
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
       headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
+        <View style={styles.headerImageContainer}>
+          <IconSymbol
+            size={HEADER_ICON_SIZE}
+            color="#808080"
+            name="chevron.left.forwardslash.chevron.right"
+            style={styles.headerImage}
+          />
+        </View>
       }>
       <ThemedView style={styles.titleContainer}>
         <ThemedText
@@ -99,12 +103,17 @@ export default function TabTwoScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
+  headerImageContainer: {
     bottom: -90,
     left: -35,
     position: 'absolute',
   },
+  headerImage: Platform.select({
+    web: {
+      lineHeight: HEADER_ICON_SIZE,
+    },
+    default: {},
+  }),
   titleContainer: {
     flexDirection: 'row',
     gap: 8,
