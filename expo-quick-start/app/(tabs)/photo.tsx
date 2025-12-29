@@ -31,6 +31,7 @@ export default function Index() {
     ImageSourcePropType | undefined
   >(undefined);
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
+  const hasPermission = permissionResponse?.granted;
 
   const pickImageAsync = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -78,7 +79,11 @@ export default function Index() {
       }
     } else {
       try {
-        const dataUrl = await domtoimage.toJpeg(imageRef.current, {
+        if (!imageRef.current) {
+          return;
+        }
+        const target = imageRef.current as unknown as HTMLElement;
+        const dataUrl = await domtoimage.toJpeg(target, {
           quality: 0.95,
           width: 320,
           height: 440,
@@ -95,10 +100,10 @@ export default function Index() {
   };
 
   useEffect(() => {
-    if (!permissionResponse?.granted) {
+    if (!hasPermission) {
       requestPermission();
     }
-  }, []);
+  }, [hasPermission, requestPermission]);
 
   return (
     <GestureHandlerRootView style={styles.container}>
