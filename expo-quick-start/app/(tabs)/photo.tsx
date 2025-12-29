@@ -102,7 +102,7 @@ export default function Index() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={styles.container}>
+      <View style={[styles.container, styles.contentContainer]}>
         <View style={styles.imageContainer}>
           <View ref={imageRef} collapsable={false}>
             <ImageViewer
@@ -152,6 +152,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#25292e",
     alignItems: "center",
+  },
+  contentContainer: {
+    paddingTop: 16,
   },
   imageContainer: {
     flex: 1,

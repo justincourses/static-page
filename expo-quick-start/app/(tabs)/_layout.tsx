@@ -9,6 +9,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const headerBackgroundColor = Colors[colorScheme ?? 'light'].background;
+  const headerTextColor = Colors[colorScheme ?? 'light'].text;
 
   return (
     <Tabs
@@ -16,7 +18,11 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: true,
         headerStyle: {
-          backgroundColor: "#25292e",
+          backgroundColor: headerBackgroundColor,
+        },
+        headerTintColor: headerTextColor,
+        headerTitleStyle: {
+          color: headerTextColor,
         },
         tabBarStyle: {
           paddingTop: 5,
