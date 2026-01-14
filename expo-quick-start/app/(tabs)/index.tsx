@@ -429,6 +429,7 @@ export default function CreateScreen() {
                   imageSize={40}
                   stickerSource={stickerSource}
                   isActive={layer.id === activeLayerId}
+                  onSelect={() => setActiveLayerId(layer.id)}
                 />
               );
             })}
