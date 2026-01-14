@@ -1,6 +1,7 @@
-import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
+
+import { Tabs } from 'expo-router';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -14,8 +15,9 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: true,
         headerStyle: {
           backgroundColor: headerBackgroundColor,
@@ -26,7 +28,7 @@ export default function TabLayout() {
         },
         tabBarStyle: {
           paddingTop: 5,
-          backgroundColor: "#25292e",
+          backgroundColor: '#25292e',
           ...(Platform.OS === 'web'
             ? {
                 height: 64,
@@ -41,27 +43,18 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: 'Create',
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+            <IconSymbol size={28} name="plus.circle.fill" color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
-          title: "Guide",
+          title: 'Guide',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="paperplane.fill" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="photo"
-        options={{
-          title: "Photo",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="camera.fill" color={color} />
           ),
         }}
       />
