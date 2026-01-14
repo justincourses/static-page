@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -10,32 +10,37 @@ type Props = PropsWithChildren<{
 }>;
 
 export default function StickerSheet({ isVisible, onClose, title, children }: Props) {
+  if (!isVisible) {
+    return null;
+  }
+
   return (
-    <View>
-      <Modal animationType="slide" transparent visible={isVisible}>
-        <View style={styles.modalContent}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>{title ?? 'Layers'}</Text>
-            <Pressable onPress={onClose}>
-              <MaterialIcons name="close" color="#fff" size={22} />
-            </Pressable>
-          </View>
-          <View style={styles.content}>{children}</View>
+    <View style={styles.overlay} pointerEvents="box-none">
+      <View style={styles.modalContent} pointerEvents="auto">
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>{title ?? 'Layers'}</Text>
+          <Pressable onPress={onClose}>
+            <MaterialIcons name="close" color="#fff" size={22} />
+          </Pressable>
         </View>
-      </Modal>
+        <View style={styles.content}>{children}</View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 20,
+  },
   modalContent: {
-    height: '50%',
+    height: '60%',
     width: '100%',
     backgroundColor: '#25292e',
     borderTopRightRadius: 18,
     borderTopLeftRadius: 18,
-    position: 'absolute',
-    bottom: 0,
   },
   titleContainer: {
     height: 48,

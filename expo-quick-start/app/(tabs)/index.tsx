@@ -14,6 +14,7 @@ import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
+import { useNavigation } from 'expo-router';
 import domtoimage from 'dom-to-image';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { captureRef } from 'react-native-view-shot';
@@ -150,6 +151,7 @@ const saveCustomStickers = async (storageMode: StorageMode, stickers: CustomStic
 };
 
 export default function CreateScreen() {
+  const navigation = useNavigation();
   const imageRef = useRef<View>(null);
 
   const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined);
@@ -182,6 +184,20 @@ export default function CreateScreen() {
     return entries;
   }, [stickerLibrary]);
   const activeStickerId = layers.find((layer) => layer.id === activeLayerId)?.stickerId;
+  const orderedLayers = useMemo(() => {
+    if (!activeLayerId) {
+      return layers;
+    }
+
+    const nextLayers = [...layers];
+    const activeIndex = nextLayers.findIndex((layer) => layer.id === activeLayerId);
+    if (activeIndex === -1) {
+      return nextLayers;
+    }
+
+    const [activeLayer] = nextLayers.splice(activeIndex, 1);
+    return [...nextLayers, activeLayer];
+  }, [layers, activeLayerId]);
 
   useEffect(() => {
     const loadStickers = async () => {
@@ -366,13 +382,28 @@ export default function CreateScreen() {
     }
   }, [hasPermission, requestPermission]);
 
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (!parent) {
+      return;
+    }
+
+    parent.setOptions({
+      tabBarStyle: isLayerModalVisible ? { display: 'none' } : undefined,
+    });
+
+    return () => {
+      parent.setOptions({ tabBarStyle: undefined });
+    };
+  }, [isLayerModalVisible, navigation]);
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={[styles.container, styles.contentContainer]}>
         <View style={styles.imageContainer}>
           <View ref={imageRef} collapsable={false}>
             <ImageViewer imgSource={PlaceholderImage} selectedImage={selectedImage} />
-            {layers.map((layer) => {
+            {orderedLayers.map((layer) => {
               const stickerSource = layer.stickerId
                 ? stickerSourceById.get(layer.stickerId)
                 : undefined;
@@ -386,6 +417,7 @@ export default function CreateScreen() {
                   key={layer.id}
                   imageSize={40}
                   stickerSource={stickerSource}
+                  isActive={layer.id === activeLayerId}
                 />
               );
             })}
@@ -506,6 +538,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingTop: 16,
+    width: '100%',
   },
   imageContainer: {
     flex: 1,
