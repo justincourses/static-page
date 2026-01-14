@@ -41,11 +41,18 @@ export default function TabTwoScreen() {
           placeholder. Allow photo access when prompted.
         </ThemedText>
       </Collapsible>
-      <Collapsible title="Add a sticker">
+      <Collapsible title="Add layers and stickers">
         <ThemedText>
-          Tap the <ThemedText type="defaultSemiBold">+</ThemedText> button to open the emoji picker,
-          then choose an emoji to place it on the photo. Drag it to reposition and double-tap to
-          resize. Picking another emoji replaces the current sticker.
+          Tap the <ThemedText type="defaultSemiBold">+</ThemedText> button to open the layers
+          panel. Add a layer, then choose a sticker from the library. Each layer keeps its own
+          sticker, so you can stack multiple stickers on the same photo.
+        </ThemedText>
+      </Collapsible>
+      <Collapsible title="Upload a custom sticker">
+        <ThemedText>
+          In the layers panel, tap <ThemedText type="defaultSemiBold">Upload</ThemedText> to bring
+          in an image from your library. Uploaded stickers are saved in the app and show up in the
+          sticker library next time you open it.
         </ThemedText>
       </Collapsible>
       <Collapsible title="Save or reset">
