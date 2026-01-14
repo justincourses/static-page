@@ -184,20 +184,9 @@ export default function CreateScreen() {
     return entries;
   }, [stickerLibrary]);
   const activeStickerId = layers.find((layer) => layer.id === activeLayerId)?.stickerId;
-  const orderedLayers = useMemo(() => {
-    if (!activeLayerId) {
-      return layers;
-    }
-
-    const nextLayers = [...layers];
-    const activeIndex = nextLayers.findIndex((layer) => layer.id === activeLayerId);
-    if (activeIndex === -1) {
-      return nextLayers;
-    }
-
-    const [activeLayer] = nextLayers.splice(activeIndex, 1);
-    return [...nextLayers, activeLayer];
-  }, [layers, activeLayerId]);
+  const renderLayers = useMemo(() => {
+    return [...layers].reverse();
+  }, [layers]);
 
   useEffect(() => {
     const loadStickers = async () => {
@@ -252,7 +241,10 @@ export default function CreateScreen() {
 
   const addLayer = () => {
     const layerId = createId();
-    setLayers((prev) => [...prev, { id: layerId, name: `Layer ${prev.length + 1}` }]);
+    setLayers((prev) => [
+      { id: layerId, name: `Layer ${prev.length + 1}` },
+      ...prev,
+    ]);
     setActiveLayerId(layerId);
   };
 
@@ -260,8 +252,27 @@ export default function CreateScreen() {
     setLayers((prev) => {
       const nextLayers = prev.filter((layer) => layer.id !== layerId);
       if (activeLayerId === layerId) {
-        setActiveLayerId(nextLayers.at(-1)?.id);
+        setActiveLayerId(nextLayers[0]?.id);
       }
+      return nextLayers;
+    });
+  };
+
+  const moveLayer = (layerId: string, direction: 'up' | 'down') => {
+    setLayers((prev) => {
+      const index = prev.findIndex((layer) => layer.id === layerId);
+      if (index === -1) {
+        return prev;
+      }
+
+      const nextIndex = direction === 'up' ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) {
+        return prev;
+      }
+
+      const nextLayers = [...prev];
+      const [movedLayer] = nextLayers.splice(index, 1);
+      nextLayers.splice(nextIndex, 0, movedLayer);
       return nextLayers;
     });
   };
@@ -272,8 +283,8 @@ export default function CreateScreen() {
     if (!targetLayerId) {
       targetLayerId = createId();
       setLayers((prev) => [
-        ...prev,
         { id: targetLayerId, name: `Layer ${prev.length + 1}`, stickerId },
+        ...prev,
       ]);
     } else {
       setLayers((prev) =>
@@ -403,7 +414,7 @@ export default function CreateScreen() {
         <View style={styles.imageContainer}>
           <View ref={imageRef} collapsable={false}>
             <ImageViewer imgSource={PlaceholderImage} selectedImage={selectedImage} />
-            {orderedLayers.map((layer) => {
+            {renderLayers.map((layer) => {
               const stickerSource = layer.stickerId
                 ? stickerSourceById.get(layer.stickerId)
                 : undefined;
@@ -450,10 +461,12 @@ export default function CreateScreen() {
               <Text style={styles.emptyText}>No layers yet. Add one to get started.</Text>
             ) : (
               <ScrollView style={styles.layerList} contentContainerStyle={styles.layerListContent}>
-                {layers.map((layer) => {
+                {layers.map((layer, index) => {
                   const stickerSource = layer.stickerId
                     ? stickerSourceById.get(layer.stickerId)
                     : undefined;
+                  const isTopLayer = index === 0;
+                  const isBottomLayer = index === layers.length - 1;
 
                   return (
                     <Pressable
@@ -477,15 +490,45 @@ export default function CreateScreen() {
                           {layer.stickerId ? 'Sticker assigned' : 'Choose a sticker'}
                         </Text>
                       </View>
-                      <Pressable
-                        onPress={(event) => {
-                          event.stopPropagation();
-                          removeLayer(layer.id);
-                        }}
-                        style={styles.layerDelete}
-                      >
-                        <MaterialIcons name="delete" size={20} color="#ff9a9a" />
-                      </Pressable>
+                      <View style={styles.layerActions}>
+                        <Pressable
+                          disabled={isTopLayer}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            moveLayer(layer.id, 'up');
+                            setActiveLayerId(layer.id);
+                          }}
+                          style={[
+                            styles.layerActionButton,
+                            isTopLayer ? styles.layerActionDisabled : null,
+                          ]}
+                        >
+                          <MaterialIcons name="arrow-upward" size={18} color="#fff" />
+                        </Pressable>
+                        <Pressable
+                          disabled={isBottomLayer}
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            moveLayer(layer.id, 'down');
+                            setActiveLayerId(layer.id);
+                          }}
+                          style={[
+                            styles.layerActionButton,
+                            isBottomLayer ? styles.layerActionDisabled : null,
+                          ]}
+                        >
+                          <MaterialIcons name="arrow-downward" size={18} color="#fff" />
+                        </Pressable>
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            removeLayer(layer.id);
+                          }}
+                          style={styles.layerActionButton}
+                        >
+                          <MaterialIcons name="delete" size={18} color="#ff9a9a" />
+                        </Pressable>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -630,8 +673,18 @@ const styles = StyleSheet.create({
     color: '#c5c8ce',
     fontSize: 12,
   },
-  layerDelete: {
+  layerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  layerActionButton: {
     padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#3b3f46',
+  },
+  layerActionDisabled: {
+    opacity: 0.4,
   },
   stickerList: {
     paddingVertical: 4,

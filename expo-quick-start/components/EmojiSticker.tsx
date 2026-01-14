@@ -1,4 +1,4 @@
-import { ImageSourcePropType } from 'react-native';
+import { ImageSourcePropType, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
@@ -9,17 +9,24 @@ import Animated, {
 type Props = {
   imageSize: number;
   stickerSource: ImageSourcePropType;
+  isActive?: boolean;
 };
 
-export default function EmojiSticker({ imageSize, stickerSource }: Props) {
-  const scaleImage = useSharedValue(imageSize);
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
+const CANVAS_WIDTH = 320;
+const CANVAS_HEIGHT = 440;
 
-  const drag = Gesture.Pan().onChange((event) => {
-    translateX.value += event.changeX;
-    translateY.value += event.changeY;
-  });
+export default function EmojiSticker({ imageSize, stickerSource, isActive }: Props) {
+  const isStickerActive = isActive ?? true;
+  const scaleImage = useSharedValue(imageSize);
+  const translateX = useSharedValue((CANVAS_WIDTH - imageSize) / 2);
+  const translateY = useSharedValue((CANVAS_HEIGHT - imageSize) / 2);
+
+  const drag = Gesture.Pan()
+    .enabled(isStickerActive)
+    .onChange((event) => {
+      translateX.value += event.changeX;
+      translateY.value += event.changeY;
+    });
 
   const containerStyle = useAnimatedStyle(() => {
     return {
@@ -36,6 +43,7 @@ export default function EmojiSticker({ imageSize, stickerSource }: Props) {
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
+    .enabled(isStickerActive)
     .onStart(() => {
       if (scaleImage.value !== imageSize * 2) {
         scaleImage.value = scaleImage.value * 2;
@@ -53,7 +61,14 @@ export default function EmojiSticker({ imageSize, stickerSource }: Props) {
 
   return (
     <GestureDetector gesture={drag}>
-      <Animated.View style={[containerStyle, { top: -350 }]}>
+      <Animated.View
+        pointerEvents={isStickerActive ? 'auto' : 'none'}
+        style={[
+          styles.stickerContainer,
+          containerStyle,
+          { opacity: isStickerActive ? 1 : 0.6 },
+        ]}
+      >
         <GestureDetector gesture={doubleTap}>
           <Animated.Image
             source={stickerSource}
@@ -65,3 +80,11 @@ export default function EmojiSticker({ imageSize, stickerSource }: Props) {
     </GestureDetector>
   );
 }
+
+const styles = StyleSheet.create({
+  stickerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+});
