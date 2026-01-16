@@ -3,6 +3,17 @@
 This is an Expo React Native application using file-based routing (expo-router).
 It targets iOS, Android, and Web platforms with React 19 and React Native 0.81.
 
+## Skills First
+
+Before starting any task, check whether there is a relevant skill available and apply it. If multiple skills apply, use the minimal set that covers the request and follow their instructions.
+
+## Task Execution Rules
+
+- For every task, first break it into a TODO list.
+- Each TODO item is complete only after a check step.
+- Minimum check: `npm run lint` must pass.
+- For large tasks, `npm run build` must pass after completion.
+
 ## Build and Development Commands
 
 ```bash
