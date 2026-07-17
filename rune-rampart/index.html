@@ -54,6 +54,9 @@
           <button class="icon-button rules-button" id="rulesButton" type="button" aria-label="查看游戏规则" data-tooltip-key="rules">
             <span aria-hidden="true">?</span>
           </button>
+          <button class="icon-button leaderboard-button" id="leaderboardButton" type="button" aria-label="查看本机排行榜" data-tooltip-key="leaderboard">
+            <span aria-hidden="true">榜</span>
+          </button>
           <button class="icon-button" id="fullscreenButton" type="button" aria-label="进入全屏" data-tooltip-key="fullscreen">
             <span aria-hidden="true">⛶</span>
           </button>
@@ -432,37 +435,63 @@
           <strong id="finalScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
           <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；历史榜先按大佬、老兵、新手分层，再比较波次、总分、歼敌与消除，完全相同时较早战报优先。</small>
         </div>
-        <section class="history-board" aria-labelledby="historyTitle">
-          <div class="history-heading">
-            <div><h3 id="historyTitle">本机历史战绩</h3><span id="historyCount">0 条战报</span></div>
-            <div class="history-filters" role="group" aria-label="按难度查看历史排名">
-              <button class="is-active" type="button" data-history-filter="all" aria-pressed="true">总榜</button>
-              <button type="button" data-history-filter="master" aria-pressed="false">大佬</button>
-              <button type="button" data-history-filter="veteran" aria-pressed="false">老兵</button>
-              <button type="button" data-history-filter="rookie" aria-pressed="false">新手</button>
+        <div id="failureHistorySlot">
+          <section class="history-board" id="historyBoard" aria-labelledby="historyTitle">
+            <div class="history-heading">
+              <div><h3 id="historyTitle">本机历史战绩</h3><span id="historyCount">0 条战报</span></div>
+              <div class="history-filters" role="group" aria-label="按难度查看历史排名">
+                <button class="is-active" type="button" data-history-filter="all" aria-pressed="true">总榜</button>
+                <button type="button" data-history-filter="master" aria-pressed="false">大佬</button>
+                <button type="button" data-history-filter="veteran" aria-pressed="false">老兵</button>
+                <button type="button" data-history-filter="rookie" aria-pressed="false">新手</button>
+              </div>
             </div>
-          </div>
-          <div class="history-table-wrap">
-            <table class="history-table">
-              <thead><tr><th scope="col">名次</th><th scope="col">难度</th><th scope="col">波次</th><th scope="col">总分</th><th scope="col">歼敌</th><th scope="col">时长</th><th scope="col">记录时间</th></tr></thead>
-              <tbody id="historyRows"></tbody>
-            </table>
-          </div>
-        </section>
+            <div class="history-table-wrap">
+              <table class="history-table">
+                <thead><tr><th scope="col">名次</th><th scope="col">难度</th><th scope="col">波次</th><th scope="col">总分</th><th scope="col">歼敌</th><th scope="col">时长</th><th scope="col">记录时间</th></tr></thead>
+                <tbody id="historyRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
         <button class="primary-button" id="restartButton" type="button"><span>重整防线</span><small>再次出征</small></button>
       </div>
     </div>
 
     <div class="modal-backdrop" id="victoryModal" role="dialog" aria-modal="true" aria-labelledby="victoryTitle">
       <div class="briefing-card victory-card">
-        <span class="briefing-kicker">第 100 波肃清 · 百波登顶</span>
-        <h2 id="victoryTitle">你真的顶住了<br />整整 100 波。</h2>
-        <div class="final-stats">
-          <div><span>最终波次</span><strong>100</strong></div>
-          <div><span>歼灭敌军</span><strong id="victoryKills">0</strong></div>
-          <div><span>最终军功</span><strong id="victoryScore">0</strong></div>
+        <div class="settlement-heading">
+          <div>
+            <span class="briefing-kicker">第 100 波肃清 · 百波登顶</span>
+            <h2 id="victoryTitle">你真的顶住了整整 100 波。</h2>
+          </div>
+          <div class="settlement-rank-stamp victory-rank-stamp"><span>总榜名次</span><strong id="victoryRank">#01</strong></div>
         </div>
+        <div class="final-stats settlement-stats victory-stats">
+          <div><span>难度</span><strong id="victoryDifficulty">新手</strong></div>
+          <div><span>最终波次</span><strong>100 / 100</strong></div>
+          <div><span>歼灭敌军</span><strong id="victoryKills">0</strong></div>
+          <div><span>消除组数</span><strong id="victoryMatches">0</strong></div>
+          <div><span>有效时长</span><strong id="victoryTime">00:00</strong></div>
+          <div><span>结算总分</span><strong id="victoryScore">0</strong></div>
+        </div>
+        <div class="score-ledger victory-ledger">
+          <span>登顶分构成</span>
+          <strong id="victoryScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
+          <small>本局已写入浏览器历史榜；可切换总榜、大佬、老兵和新手榜查看排名。</small>
+        </div>
+        <div id="victoryHistorySlot"></div>
         <button class="primary-button" id="victoryRestartButton" type="button"><span>再次挑战</span><small>重新选择难度</small></button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="leaderboardModal" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle" aria-describedby="leaderboardDescription">
+      <div class="briefing-card leaderboard-card">
+        <button class="modal-close" id="leaderboardClose" type="button" aria-label="关闭排行榜">×</button>
+        <span class="briefing-kicker">本机战报 · LOCAL ARCHIVE</span>
+        <h2 id="leaderboardTitle">排行榜</h2>
+        <p id="leaderboardDescription">默认显示总榜；不同难度会分别重新计算名次，记录仅保存在当前浏览器。</p>
+        <div id="leaderboardHistorySlot"></div>
       </div>
     </div>
 

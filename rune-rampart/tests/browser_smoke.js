@@ -152,6 +152,33 @@ let activeBrowser;
   if (await page.locator('#pauseButton').getAttribute('title') !== null || await page.locator('#soundButton').getAttribute('title') !== null || await page.locator('#fullscreenButton').getAttribute('title') !== null) throw new Error('Native titles can overlap the custom contextual tooltip');
   await page.evaluate(() => document.activeElement?.blur());
   await page.mouse.move(0, 0);
+  await page.locator('#leaderboardButton').click();
+  await page.locator('#leaderboardModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+  await page.waitForTimeout(160);
+  const navbarLeaderboard = await page.evaluate(() => {
+    const save = JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null');
+    return {
+      paused: window.__runeRampartTest.snapshot().paused,
+      musicPlaying: window.__runeRampartTest.musicState().playing,
+      saveReason: save?.reason,
+      boardParent: document.querySelector('#historyBoard').parentElement?.id,
+      filter: document.querySelector('[data-history-filter="all"]').getAttribute('aria-pressed'),
+      count: document.querySelector('#historyCount').textContent,
+      emptyText: document.querySelector('#historyRows').textContent.trim(),
+      focused: document.activeElement?.id
+    };
+  });
+  if (!navbarLeaderboard.paused || navbarLeaderboard.musicPlaying || navbarLeaderboard.saveReason !== 'pause' || navbarLeaderboard.boardParent !== 'leaderboardHistorySlot' || navbarLeaderboard.filter !== 'true' || navbarLeaderboard.count !== '0 条战报' || !navbarLeaderboard.emptyText.includes('还没有战报') || navbarLeaderboard.focused !== 'leaderboardClose') throw new Error(`Navbar leaderboard did not pause safely and show the default overall ranking: ${JSON.stringify(navbarLeaderboard)}`);
+  await assertMinimumFont(page, 'Navbar leaderboard');
+  await page.screenshot({ path: path.join(output, 'navbar-leaderboard.png'), fullPage: false });
+  await page.locator('#leaderboardClose').click();
+  const leaderboardClosed = await page.evaluate(() => ({
+    open: document.querySelector('#leaderboardModal').classList.contains('is-open'),
+    paused: window.__runeRampartTest.snapshot().paused,
+    musicPlaying: window.__runeRampartTest.musicState().playing,
+    focused: document.activeElement?.id
+  }));
+  if (leaderboardClosed.open || leaderboardClosed.paused || !leaderboardClosed.musicPlaying || leaderboardClosed.focused !== 'leaderboardButton') throw new Error(`Closing navbar leaderboard did not restore the battle: ${JSON.stringify(leaderboardClosed)}`);
   const playlistCycle = await page.evaluate(() => {
     const test = window.__runeRampartTest;
     const before = test.musicState();
@@ -817,6 +844,30 @@ let activeBrowser;
   await page.locator('#introClose').click();
   await page.evaluate(() => window.__runeRampartTest.clearWave(100));
   await page.locator('#victoryModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+  const victoryView = await page.evaluate(() => {
+    const history = window.__runeRampartTest.history();
+    const card = document.querySelector('.victory-card');
+    return {
+      rank: document.querySelector('#victoryRank').textContent,
+      difficulty: document.querySelector('#victoryDifficulty').textContent,
+      kills: document.querySelector('#victoryKills').textContent,
+      matches: document.querySelector('#victoryMatches').textContent,
+      time: document.querySelector('#victoryTime').textContent,
+      score: document.querySelector('#victoryScore').textContent,
+      breakdown: document.querySelector('#victoryScoreBreakdown').textContent,
+      boardParent: document.querySelector('#historyBoard').parentElement?.id,
+      currentRows: document.querySelectorAll('#historyRows tr.is-current').length,
+      rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)),
+      history,
+      horizontalFit: card.scrollWidth <= card.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1
+    };
+  });
+  if (victoryView.rank !== '#01' || victoryView.difficulty !== '老兵' || victoryView.boardParent !== 'victoryHistorySlot' || victoryView.currentRows !== 1 || victoryView.rows[0]?.[2] !== '100 波' || !victoryView.breakdown.includes('波次 150,000') || !victoryView.history[0]?.victory || victoryView.history[0]?.clearedWaves !== 100 || victoryView.score.replace(/\D/g, '') !== String(victoryView.history[0]?.settlementScore) || !victoryView.horizontalFit) throw new Error(`Victory settlement does not show and highlight the persisted leaderboard: ${JSON.stringify(victoryView)}`);
+  await page.locator('[data-history-filter="veteran"]').click();
+  if (await page.locator('#historyRows tr.is-current td').first().innerText() !== '#01') throw new Error('Victory leaderboard cannot switch to and rerank the current difficulty');
+  await page.locator('[data-history-filter="all"]').click();
+  await assertMinimumFont(page, 'Victory settlement leaderboard');
+  await page.screenshot({ path: path.join(output, 'victory-settlement.png'), fullPage: false });
   await page.locator('#victoryRestartButton').click();
   await page.locator('#introModal.is-open').waitFor({ state: 'visible', timeout: 500 });
 
@@ -844,10 +895,11 @@ let activeBrowser;
     time: document.querySelector('#finalTime').textContent,
     score: document.querySelector('#finalScore').textContent,
     breakdown: document.querySelector('#finalScoreBreakdown').textContent,
+    boardParent: document.querySelector('#historyBoard').parentElement?.id,
     currentRows: document.querySelectorAll('#historyRows tr.is-current').length,
     rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent))
   }));
-  if (settlementView.rank !== '#02' || settlementView.difficulty !== '老兵' || settlementView.wave !== '12 / 100' || settlementView.kills !== '42' || settlementView.matches !== '18' || settlementView.time !== '02:05' || settlementView.score.replace(/\D/g, '') !== '23250' || !settlementView.breakdown.includes('基础军功 5,000') || !settlementView.breakdown.includes('波次 18,000') || settlementView.currentRows !== 1) {
+  if (settlementView.rank !== '#02' || settlementView.difficulty !== '老兵' || settlementView.wave !== '12 / 100' || settlementView.kills !== '42' || settlementView.matches !== '18' || settlementView.time !== '02:05' || settlementView.score.replace(/\D/g, '') !== '23250' || !settlementView.breakdown.includes('基础军功 5,000') || !settlementView.breakdown.includes('波次 18,000') || settlementView.boardParent !== 'failureHistorySlot' || settlementView.currentRows !== 1) {
     throw new Error(`Failure settlement does not explain the result: ${JSON.stringify(settlementView)}`);
   }
   const historyIds = settlementHistory.map((record) => record.id);

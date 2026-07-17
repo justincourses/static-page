@@ -227,6 +227,7 @@ button:focus-visible {
 .text-button { padding: 7px 11px; font-size: 14px; font-weight: 800; letter-spacing: .04em; }
 .restart-short { display: none; }
 .icon-button { width: 34px; height: 34px; font-weight: 900; }
+.leaderboard-button span { font-size: 14px; font-weight: 900; }
 .rules-button span { display: inline-block; font-size: 17px; line-height: 1; }
 .text-button:hover, .icon-button:hover { color: var(--paper-light); background: var(--ink); transform: translateY(-2px); }
 .icon-button.is-active { color: var(--cream); background: var(--red-dark); border-color: var(--red-dark); }
@@ -1043,6 +1044,13 @@ button:focus-visible {
 .resume-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .game-over-card { width: min(900px, 100%); max-height: calc(100vh - 28px); overflow-y: auto; padding: clamp(22px, 3vw, 34px); text-align: left; }
 .game-over-card::after { display: none; }
+.victory-card, .leaderboard-card { width: min(900px, 100%); max-height: calc(100vh - 28px); overflow-y: auto; padding: clamp(22px, 3vw, 34px); text-align: left; }
+.victory-card::after { content: "百胜"; }
+.leaderboard-card { width: min(860px, 100%); transform: translateY(18px); }
+.is-open .leaderboard-card { transform: translateY(0); }
+.leaderboard-card::after { content: "榜"; }
+.leaderboard-card h2 { margin-bottom: 4px; }
+.leaderboard-card > p { margin: 0 40px 12px 0; }
 .settlement-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .settlement-heading h2 { margin: 7px 0 0; font-size: clamp(28px, 3.2vw, 40px); }
 .settlement-rank-stamp { min-width: 94px; padding: 7px 10px; color: var(--red-dark); border: 2px solid rgba(126,40,31,.62); text-align: center; transform: rotate(2deg); }
@@ -1076,7 +1084,8 @@ button:focus-visible {
 .history-table tbody tr:last-child td { border-bottom: 0; }
 .history-table tbody tr.is-current { color: #f2e4bd; background: #4a3329; }
 .history-table tbody tr.is-current td:first-child { color: #f0bd48; font-weight: 900; }
-.game-over-card .primary-button { margin-top: 8px; }
+.history-table .history-empty-row td { padding: 18px 10px; color: #756e5c; text-align: center; white-space: normal; }
+.game-over-card .primary-button, .victory-card .primary-button { margin-top: 8px; }
 
 @keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(213,82,55,0); } 100% { box-shadow: 0 0 0 0 rgba(213,82,55,0); } }
 @keyframes tile-in { from { opacity: 0; transform: translateY(-18px) scale(.8); } }
@@ -1134,7 +1143,7 @@ button:focus-visible {
   .rules-card { padding: 21px 16px; }
   .rules-grid { grid-template-columns: 1fr; gap: 6px; }
   .rule-section { padding: 9px 11px 10px; }
-  .game-over-card { padding: 21px 16px; }
+  .game-over-card, .victory-card, .leaderboard-card { padding: 21px 16px; }
   .settlement-heading { align-items: center; }
   .settlement-heading h2 { font-size: 27px; }
   .settlement-rank-stamp { min-width: 76px; padding: 5px 7px; }

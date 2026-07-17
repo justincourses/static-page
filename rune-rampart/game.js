@@ -218,8 +218,10 @@
     introModal: $('#introModal'),
     resumeModal: $('#resumeModal'),
     rulesModal: $('#rulesModal'),
+    leaderboardModal: $('#leaderboardModal'),
     gameOverModal: $('#gameOverModal'),
     victoryModal: $('#victoryModal'),
+    leaderboardButton: $('#leaderboardButton'),
     pauseButton: $('#pauseButton'),
     fullscreenButton: $('#fullscreenButton'),
     musicButton: $('#musicButton'),
@@ -498,7 +500,7 @@
     waveQueue: 0, waveTotal: 0, waveSpawned: 0, waveBossesRemaining: 0,
     waveMatches: 0, totalMatches: 0, waveProfile: null, nextSpawnAt: 0, intermissionUntil: 0,
     attackReadyAt: 0, lastFrame: 0, animationId: 0, lastUiAt: 0, sessionId: 0,
-    combatBuff: null, combatBuffQueue: [], introWasPaused: false, rulesWasPaused: false, pendingSaveReason: null,
+    combatBuff: null, combatBuffQueue: [], introWasPaused: false, rulesWasPaused: false, leaderboardWasPaused: false, pendingSaveReason: null,
     resolution: null, pausedAt: 0, activePlayMs: 0, playSegmentStartedAt: 0, settlementRecorded: false
   };
   let pendingResume = null;
@@ -506,6 +508,7 @@
   let currentSettlementId = null;
   let activeHistoryFilter = 'all';
   let rulesReturnFocus = null;
+  let leaderboardReturnFocus = null;
   let contextTooltipTarget = null;
   const gameTasks = new Set();
 
@@ -532,6 +535,7 @@
           : '选择新手、老兵或大佬难度，再开始一场新的百波战役。'
       },
       rules: { title: '完整规则', body: '集中查看消除、补强、战斗、彩蛋、难度、排名与存档规则；打开时会暂停并保存。' },
+      leaderboard: { title: `本机排行榜 · ${settlementHistory.length} 条`, body: '打开总榜或按新手、老兵、大佬难度查看历史战绩；游戏中打开会立即暂停并保存，关闭后恢复。' },
       fullscreen: { title: document.fullscreenElement ? '退出全屏' : '进入全屏', body: '切换显示模式，不会改变战局进度或暂停状态。' },
       sound: { title: sound.muted ? '音效已关闭' : '音效已开启', body: `点击${sound.muted ? '开启' : '关闭'}射击、命中、消除与升级音效；MIDI 军乐单独控制。` },
       pause: {
@@ -808,6 +812,12 @@
     return { record, history, rank: history.findIndex((item) => item.id === record.id) + 1 };
   }
 
+  function mountHistoryBoard(slot) {
+    const board = $('#historyBoard');
+    const target = typeof slot === 'string' ? $(slot) : slot;
+    if (board && target && board.parentElement !== target) target.appendChild(board);
+  }
+
   function renderHistory(history = settlementHistory, currentId = currentSettlementId) {
     const rows = $('#historyRows');
     if (!rows) return;
@@ -837,6 +847,15 @@
       });
       rows.appendChild(row);
     });
+    if (!visibleHistory.length) {
+      const row = document.createElement('tr');
+      row.className = 'history-empty-row';
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.textContent = activeHistoryFilter === 'all' ? '还没有战报，完成一局后会自动记录。' : `还没有「${DIFFICULTIES[activeHistoryFilter].name}」难度的战报。`;
+      row.appendChild(cell);
+      rows.appendChild(row);
+    }
     document.querySelectorAll('[data-history-filter]').forEach((button) => {
       const active = button.dataset.historyFilter === activeHistoryFilter;
       button.classList.toggle('is-active', active);
@@ -865,6 +884,24 @@
     settlementHistory = history;
     currentSettlementId = record.id;
     activeHistoryFilter = 'all';
+    mountHistoryBoard('#failureHistorySlot');
+    renderHistory();
+  }
+
+  function renderVictorySettlement(result) {
+    if (!result) return;
+    const { record, history, rank } = result;
+    $('#victoryDifficulty').textContent = DIFFICULTIES[record.difficulty].name;
+    $('#victoryKills').textContent = record.kills;
+    $('#victoryMatches').textContent = record.totalMatches;
+    $('#victoryTime').textContent = formatBattleTime(record.activePlayMs);
+    $('#victoryScore').textContent = record.settlementScore.toLocaleString('zh-CN');
+    $('#victoryRank').textContent = `#${String(rank).padStart(2, '0')}`;
+    $('#victoryScoreBreakdown').textContent = `基础军功 ${record.baseScore.toLocaleString('zh-CN')} + 波次 ${record.waveScore.toLocaleString('zh-CN')} + 坚守时间 ${record.timeScore.toLocaleString('zh-CN')}`;
+    settlementHistory = history;
+    currentSettlementId = record.id;
+    activeHistoryFilter = 'all';
+    mountHistoryBoard('#victoryHistorySlot');
     renderHistory();
   }
 
@@ -1094,6 +1131,7 @@
     state.paused = false;
     state.gameOver = false;
     state.rulesWasPaused = false;
+    state.leaderboardWasPaused = false;
     state.pendingSaveReason = null;
     state.settlementRecorded = false;
     state.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'rookie';
@@ -2446,7 +2484,7 @@
     state.sessionId += 1;
     clearGameTasks();
     state.selected = null; state.locked = false; state.started = true; state.paused = false; state.gameOver = false;
-    state.resolution = null; state.pausedAt = 0; state.activePlayMs = 0; state.settlementRecorded = false; state.rulesWasPaused = false;
+    state.resolution = null; state.pausedAt = 0; state.activePlayMs = 0; state.settlementRecorded = false; state.rulesWasPaused = false; state.leaderboardWasPaused = false;
     state.difficulty = state.selectedDifficulty;
     state.score = 0; state.kills = 0; state.wave = 1; state.emberCharges = 0; state.mana = 0; state.shield = 0; state.repaired = 0;
     state.forge = 0; state.forgeTarget = FORGE_START; state.equipment = { weapon: 1, armor: 1, charm: 1 };
@@ -2463,6 +2501,7 @@
     els.victoryModal.classList.remove('is-open');
     els.resumeModal.classList.remove('is-open');
     els.rulesModal.classList.remove('is-open');
+    els.leaderboardModal.classList.remove('is-open');
     els.introModal.classList.remove('is-open');
     els.introModal.classList.remove('is-first-visit');
     els.boardLock.classList.remove('is-visible');
@@ -2511,9 +2550,7 @@
     music.stop();
     clearSavedProgress();
     state.score += Math.round(10000 * DIFFICULTIES[state.difficulty].scoreScale);
-    recordSettlement(true);
-    $('#victoryKills').textContent = state.kills;
-    $('#victoryScore').textContent = state.score;
+    renderVictorySettlement(recordSettlement(true));
     els.victoryModal.classList.add('is-open');
     sound.tone(392, .28, 'triangle', .04);
     sound.tone(587, .42, 'triangle', .045, .16);
@@ -2531,12 +2568,14 @@
     state.paused = true;
     state.gameOver = false;
     state.rulesWasPaused = false;
+    state.leaderboardWasPaused = false;
     state.resolution = null;
     state.playSegmentStartedAt = 0;
     els.gameShell.classList.remove('is-paused');
     els.gameOverModal.classList.remove('is-open');
     els.victoryModal.classList.remove('is-open');
     els.rulesModal.classList.remove('is-open');
+    els.leaderboardModal.classList.remove('is-open');
     els.introModal.classList.add('is-open', 'is-first-visit');
     $('#startButton small').textContent = `部署 · ${DIFFICULTIES[state.selectedDifficulty].subtitle}`;
   }
@@ -2587,6 +2626,28 @@
     rulesReturnFocus = null;
   }
 
+  function openLeaderboard() {
+    if (els.leaderboardModal.classList.contains('is-open')) return;
+    leaderboardReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    state.leaderboardWasPaused = state.paused;
+    if (state.started && !state.gameOver) togglePause(true);
+    settlementHistory = readHistory();
+    currentSettlementId = null;
+    activeHistoryFilter = 'all';
+    mountHistoryBoard('#leaderboardHistorySlot');
+    renderHistory();
+    els.leaderboardModal.classList.add('is-open');
+    window.setTimeout(() => $('#leaderboardClose').focus({ preventScroll: true }), 120);
+  }
+
+  function closeLeaderboard() {
+    if (!els.leaderboardModal.classList.contains('is-open')) return;
+    els.leaderboardModal.classList.remove('is-open');
+    if (state.started && !state.gameOver && !state.leaderboardWasPaused) togglePause(false);
+    if (leaderboardReturnFocus?.isConnected) leaderboardReturnFocus.focus();
+    leaderboardReturnFocus = null;
+  }
+
   async function toggleFullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
@@ -2620,6 +2681,11 @@
   $('#rulesClose').addEventListener('click', closeRules);
   els.rulesModal.addEventListener('click', (event) => {
     if (event.target === els.rulesModal) closeRules();
+  });
+  els.leaderboardButton.addEventListener('click', openLeaderboard);
+  $('#leaderboardClose').addEventListener('click', closeLeaderboard);
+  els.leaderboardModal.addEventListener('click', (event) => {
+    if (event.target === els.leaderboardModal) closeLeaderboard();
   });
   document.querySelectorAll('.difficulty-card').forEach((button) => {
     button.addEventListener('click', () => selectDifficulty(button.dataset.difficulty));
@@ -2657,7 +2723,8 @@
   document.addEventListener('click', hideContextTooltip, true);
   document.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'q') castVolley();
-    if (event.key === 'Escape' && els.rulesModal.classList.contains('is-open')) closeRules();
+    if (event.key === 'Escape' && els.leaderboardModal.classList.contains('is-open')) closeLeaderboard();
+    else if (event.key === 'Escape' && els.rulesModal.classList.contains('is-open')) closeRules();
     else if (event.key === 'Escape' && state.started && els.introModal.classList.contains('is-open')) closeCampaignOptions();
     else if (event.key === 'Escape' && state.started) togglePause();
   });
@@ -2702,7 +2769,8 @@
         return readHistory();
       },
       setHistory(records = []) {
-        return writeHistory(records);
+        settlementHistory = writeHistory(records);
+        return settlementHistory;
       },
       forceFailure(values = {}) {
         state.started = true;
@@ -2912,6 +2980,7 @@
   const initialDifficulty = DIFFICULTIES[storedDifficulty] ? storedDifficulty : 'rookie';
   state.selectedDifficulty = initialDifficulty;
   state.difficulty = initialDifficulty;
+  settlementHistory = readHistory();
   buildBoard();
   renderBoard(new Set(), -1, 'initial');
   selectDifficulty(initialDifficulty, false);
