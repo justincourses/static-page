@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#171913" />
-    <title>符文壁垒 · Rune Rampart</title>
+    <title>是男人就顶100波</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23171913'/%3E%3Cpath d='M32 7 53 22 45 49 32 58 19 49 11 22Z' fill='%23d55237' stroke='%23f1ead6' stroke-width='4'/%3E%3Cpath d='M32 17v31M21 30h22' stroke='%23f1ead6' stroke-width='4'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -13,17 +13,21 @@
     <main class="game-shell">
       <header class="topbar">
         <div class="brand-lockup">
-          <span class="chapter-mark">第七防线</span>
+          <span class="chapter-mark">百波挑战</span>
           <div>
-            <h1>符文壁垒</h1>
-            <p>Rune Rampart / 三消驱动型塔防</p>
+            <h1>是男人就顶100波</h1>
+            <p>Match-3 Rampart / 百波极限守城</p>
           </div>
         </div>
 
         <div class="campaign-stats" aria-label="战局数据">
+          <div class="stat-stamp difficulty-stamp">
+            <span>难度</span>
+            <strong id="difficultyValue">新手</strong>
+          </div>
           <div class="stat-stamp">
-            <span>波次</span>
-            <strong id="waveValue">01</strong>
+            <span>波次 / 100</span>
+            <strong id="waveValue">001</strong>
           </div>
           <div class="stat-stamp">
             <span>歼敌</span>
@@ -36,7 +40,12 @@
         </div>
 
         <div class="header-actions">
-          <button class="text-button" id="helpButton" type="button">作战说明</button>
+          <button class="text-button" id="helpButton" type="button">
+            <span class="restart-long">战役选项</span><span class="restart-short" aria-hidden="true">重开</span>
+          </button>
+          <button class="icon-button" id="fullscreenButton" type="button" aria-label="进入全屏" title="进入全屏">
+            <span aria-hidden="true">⛶</span>
+          </button>
           <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭音效" title="关闭音效">
             <span class="sound-icon" aria-hidden="true">♪</span>
           </button>
@@ -58,10 +67,10 @@
           <span class="pulse-dot"></span>
           <span id="threatText">第一波斥候正在逼近</span>
         </div>
-        <div class="power-status">
-          <span>当前战力</span>
-          <strong id="powerValue">24</strong>
-          <small id="powerDelta">弩炮自动射击</small>
+        <div class="pressure-status">
+          <span id="pressureTierValue">第 1 阶段</span>
+          <strong><b id="waveMatchValue">0</b> / <b id="waveMatchTarget">4</b> 组</strong>
+          <small id="powerDelta">本波建议消除量</small>
         </div>
       </section>
 
@@ -106,8 +115,8 @@
         <section class="panel battle-panel" aria-labelledby="battleTitle">
           <div class="panel-heading battle-heading">
             <div>
-              <span class="eyebrow">北境防线 / 02</span>
-              <h2 id="battleTitle">坚守灰烬隘口</h2>
+              <span class="eyebrow">百波战场 / 02</span>
+              <h2 id="battleTitle">顶住这一波</h2>
             </div>
             <div class="wave-chip"><span id="waveState">敌军 0 / 7</span><i></i></div>
           </div>
@@ -121,20 +130,31 @@
             <div class="battle-sun"></div>
             <div class="lane-lines"><i></i><i></i><i></i></div>
 
-            <aside class="target-dossier is-empty" id="targetDossier" aria-live="polite">
-              <div class="target-dossier-heading">
-                <span>当前威胁 / TARGET</span>
-                <i></i>
-              </div>
-              <strong id="targetName">前线侦察中</strong>
-              <small id="targetRole">尚未发现敌军</small>
-              <div class="target-stats">
-                <div><span>攻击</span><b id="targetAttack">—</b></div>
-                <div><span>防御</span><b id="targetDefense">—</b></div>
-                <div><span>生命</span><b id="targetHealth">—</b></div>
-              </div>
-              <div class="target-health-track"><span id="targetHealthMeter"></span></div>
-            </aside>
+            <div class="threat-cluster">
+              <aside class="target-dossier is-empty" id="targetDossier" aria-live="polite">
+                <div class="target-identity">
+                  <div class="target-dossier-heading">
+                    <span>当前威胁 <em>/ TARGET</em></span>
+                    <i></i>
+                  </div>
+                  <strong id="targetName">前线侦察中</strong>
+                  <small id="targetRole">尚未发现敌军</small>
+                </div>
+                <div class="target-stats">
+                  <div><span>攻击</span><b id="targetAttack">—</b></div>
+                  <div><span>防御</span><b id="targetDefense">—</b></div>
+                  <div><span>生命</span><b id="targetHealth">—</b></div>
+                </div>
+                <div class="target-health-track"><span id="targetHealthMeter"></span></div>
+              </aside>
+            </div>
+
+            <section class="field-hud" aria-label="我方战斗属性">
+              <div class="field-hud-stat attack" title="我方攻击力"><i aria-hidden="true">⌁</i><span>攻</span><b id="hudAttack">27</b></div>
+              <div class="field-hud-stat defense" title="城墙减伤"><i aria-hidden="true">◇</i><span>防</span><b id="hudDefense">6%</b></div>
+              <div class="field-hud-stat speed" title="每秒攻击次数"><i aria-hidden="true">»</i><span>速</span><b id="hudSpeed">1.0</b></div>
+            </section>
+            <div class="combat-buffs" id="combatBuffs" aria-live="polite"></div>
 
             <div class="fortress" id="fortress">
               <div class="flag"><span></span></div>
@@ -145,6 +165,7 @@
 
             <div class="enemies-layer" id="enemiesLayer"></div>
             <div class="projectiles-layer" id="projectilesLayer"></div>
+            <div class="impact-effects-layer" id="impactEffectsLayer"></div>
             <div class="combat-toast-layer" id="combatToastLayer"></div>
 
             <div class="wave-announcement" id="waveAnnouncement">
@@ -169,56 +190,96 @@
             </div>
           </div>
 
-          <section class="arsenal" aria-labelledby="arsenalTitle">
+          <section class="arsenal compact-arsenal" aria-labelledby="arsenalTitle">
             <div class="equipment-upgrade-banner" id="equipmentUpgradeBanner" aria-live="polite">
               <span>军械升级 / AUTO-EQUIP</span>
               <strong id="upgradeEquipmentName">余烬连弩</strong>
               <small id="upgradeEquipmentLevel">LV.2 · 已自动装备</small>
             </div>
-            <div class="arsenal-heading">
-              <div>
-                <span class="eyebrow">自动军械库</span>
-                <h3 id="arsenalTitle">守城装备</h3>
+            <h3 class="visually-hidden" id="arsenalTitle">军械升级调度</h3>
+            <div class="upgrade-console">
+              <div class="strategy-copy">
+                <span>下一次升级</span>
+                <small id="strategyHint">自动 · 均衡补强</small>
               </div>
               <div class="forge-meter-wrap">
-                <span>锻造进度 <b id="forgeProgressText">0 / 18</b></span>
+                <span>锻造进度 <b id="forgeProgressText">0 / 16</b></span>
                 <div class="meter-track forge-track"><span id="forgeMeter"></span></div>
               </div>
+              <div class="strategy-options" role="group" aria-label="选择升级优先级">
+                <button class="strategy-button is-active" type="button" data-upgrade="auto" aria-pressed="true"><i>✦</i>自动</button>
+                <button class="strategy-button" type="button" data-upgrade="weapon" aria-pressed="false"><i>⌁</i>攻击</button>
+                <button class="strategy-button" type="button" data-upgrade="armor" aria-pressed="false"><i>◇</i>防御</button>
+                <button class="strategy-button" type="button" data-upgrade="charm" aria-pressed="false"><i>»</i>攻速</button>
+              </div>
             </div>
-
-            <div class="equipment-grid">
-              <article class="equipment-card weapon-card" id="weaponCard">
-                <div class="equipment-art crossbow-art"><i></i><i></i><b></b></div>
-                <div><span>主武器 · LV.<b id="weaponLevel">1</b></span><strong id="weaponName">新兵弩</strong><small id="weaponStat">伤害 +7</small></div>
+            <section class="battle-loadout" aria-label="当前军械数值">
+              <article class="loadout-stat weapon-card" id="weaponCard">
+                <span>弩炮 · LV.<b id="weaponLevel">1</b></span>
+                <strong id="weaponStat">攻击 27</strong>
+                <small id="weaponName">新兵弩</small>
               </article>
-              <article class="equipment-card armor-card" id="armorCard">
-                <div class="equipment-art shield-art"><i></i><b></b></div>
-                <div><span>防御 · LV.<b id="armorLevel">1</b></span><strong id="armorName">橡木城栅</strong><small id="armorStat">耐久 +120</small></div>
+              <article class="loadout-stat charm-card" id="charmCard">
+                <span>射速 · LV.<b id="charmLevel">1</b></span>
+                <strong id="charmStat">1.0/秒 · 单发</strong>
+                <small id="charmName">斥候号角</small>
               </article>
-              <article class="equipment-card charm-card" id="charmCard">
-                <div class="equipment-art horn-art"><i></i><b></b></div>
-                <div><span>战术 · LV.<b id="charmLevel">1</b></span><strong id="charmName">斥候号角</strong><small id="charmStat">攻速 +6%</small></div>
+              <article class="loadout-stat armor-card" id="armorCard">
+                <span>城防 · LV.<b id="armorLevel">1</b></span>
+                <strong id="armorStat">减伤 6%</strong>
+                <small id="armorName">橡木城栅</small>
               </article>
-            </div>
+            </section>
           </section>
         </section>
       </div>
     </main>
 
-    <div class="modal-backdrop is-open" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle">
-      <div class="briefing-card">
+    <div class="modal-backdrop is-open" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle" aria-describedby="introDescription">
+      <div class="briefing-card campaign-briefing">
         <button class="modal-close" id="introClose" type="button" aria-label="关闭说明">×</button>
-        <span class="briefing-kicker">第七防线 · 紧急征召令</span>
-        <h2 id="introTitle">一手调度符文，<br />一手守住城墙。</h2>
-        <p>敌军不会等你。交换左侧相邻符文完成消除，所有收益会立刻注入右侧战场。</p>
+        <span class="briefing-kicker">是男人就顶100波 · 战役配置</span>
+        <h2 id="introTitle">顶过十次跃迁，<br />站上第 100 波。</h2>
+        <p id="introDescription">每关都会变强，每 10 关敌潮跃升一级。持续消除并正确分配攻击、攻速与防御，才有机会登顶。</p>
+
+        <fieldset class="difficulty-picker">
+          <legend>选择战役难度</legend>
+          <div class="difficulty-options">
+            <button class="difficulty-card is-selected" type="button" data-difficulty="rookie" aria-pressed="true">
+              <span><b>新手</b><i>01</i></span>
+              <strong>每波约 4 组起</strong>
+              <small>高阶 22% 起 · 彩蛋较多 · 后期双批次</small>
+            </button>
+            <button class="difficulty-card" type="button" data-difficulty="veteran" aria-pressed="false">
+              <span><b>老兵</b><i>02</i></span>
+              <strong>每波约 5 组起</strong>
+              <small>高阶 34% 起 · 彩蛋适中 · 中期双批次</small>
+            </button>
+            <button class="difficulty-card" type="button" data-difficulty="master" aria-pressed="false">
+              <span><b>大佬</b><i>03</i></span>
+              <strong>每波约 5 组起</strong>
+              <small>高阶 48% 起 · 彩蛋稀少 · 最高四批次</small>
+            </button>
+          </div>
+        </fieldset>
+
+        <div class="enemy-intel" aria-label="敌军兵种说明">
+          <span>敌军图鉴</span>
+          <div><i class="swift-mark">»</i><b>速度型</b></div>
+          <div><i class="assault-mark">†</i><b>攻击型</b></div>
+          <div><i class="brute-mark">◇</i><b>防御型</b></div>
+          <div><i class="raider-mark">◆</i><b>均衡型</b></div>
+          <div><i class="boss-mark">♛</i><b>Boss</b></div>
+        </div>
+
         <div class="briefing-rules">
           <div><i class="ember">◆</i><span><b>红曜石</b>永久提升弩炮战力</span></div>
           <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，发动全场齐射</span></div>
           <div><i class="moss">⬟</i><span><b>绿晶</b>即时修复受损城墙</span></div>
-          <div><i class="coin">●</i><span><b>铸币</b>自动锻造并装备更强军械</span></div>
+          <div><i class="coin">●</i><span><b>铸币</b>按升级策略锻造军械</span></div>
         </div>
-        <button class="primary-button" id="startButton" type="button"><span>接受征召</span><small>开始守城</small></button>
-        <p class="briefing-note">提示：四连与连续坠落会产生额外收益。</p>
+        <button class="primary-button" id="startButton" type="button"><span>以「新手」出征</span><small>开始百波挑战</small></button>
+        <p class="briefing-note">战役中可从右上角重新打开此界面；确认出征将重开游戏。</p>
       </div>
     </div>
 
@@ -232,6 +293,19 @@
           <div><span>最终军功</span><strong id="finalScore">0</strong></div>
         </div>
         <button class="primary-button" id="restartButton" type="button"><span>重整防线</span><small>再次出征</small></button>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="victoryModal" role="dialog" aria-modal="true" aria-labelledby="victoryTitle">
+      <div class="briefing-card victory-card">
+        <span class="briefing-kicker">第 100 波肃清 · 百波登顶</span>
+        <h2 id="victoryTitle">你真的顶住了<br />整整 100 波。</h2>
+        <div class="final-stats">
+          <div><span>最终波次</span><strong>100</strong></div>
+          <div><span>歼灭敌军</span><strong id="victoryKills">0</strong></div>
+          <div><span>最终军功</span><strong id="victoryScore">0</strong></div>
+        </div>
+        <button class="primary-button" id="victoryRestartButton" type="button"><span>再次挑战</span><small>重新选择难度</small></button>
       </div>
     </div>
 
