@@ -712,6 +712,7 @@ button:focus-visible {
 .fortress.is-ember-firing .turret { filter: drop-shadow(0 0 8px #ff8a3d) brightness(1.35); }
 .fortress.is-ember-firing .turret::before { background: #774126; box-shadow: 0 0 12px #ff7a35; }
 .fortress.is-hit { animation: fortress-hit .3s ease; }
+.fortress.is-breached { animation: fortress-breach .48s cubic-bezier(.2,.8,.28,1); }
 .wall-blocks { position: absolute; left: 0; bottom: 0; width: 100%; height: 29%; display: flex; align-items: flex-end; }
 .wall-blocks i { display: block; width: 37%; height: 70%; background: #55574b; border: 2px solid #272820; }
 .wall-blocks i:nth-child(2) { height: 100%; }
@@ -763,6 +764,7 @@ button:focus-visible {
 .enemy:hover .enemy-stats-mini { opacity: 1; transform: translate(-50%, -125%); }
 .enemy.is-hit { animation: enemy-hit .2s ease; }
 .enemy.is-dead { animation: enemy-dead .35s ease forwards; }
+.enemy.is-self-destructing { z-index: 18; pointer-events: none; animation: enemy-self-destruct .42s ease-out forwards; }
 
 .projectile { position: absolute; width: 24px; height: 3px; background: #f3d36f; box-shadow: 0 0 7px #f4c84f; transform-origin: left; animation: projectile-fly var(--duration, .24s) linear forwards; }
 .projectile::before { content: ""; position: absolute; right: -3px; top: -3px; border-left: 7px solid #ffe798; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
@@ -776,6 +778,8 @@ button:focus-visible {
 .impact-flash i:nth-child(1) { transform: rotate(0deg); }.impact-flash i:nth-child(2) { transform: rotate(90deg); }.impact-flash i:nth-child(3) { transform: rotate(40deg); }.impact-flash i:nth-child(4) { transform: rotate(140deg); }
 .impact-flash.critical { border-color: #fff3c4; box-shadow: 0 0 18px #fff2a6; animation-duration: .68s; }
 .impact-flash.blast { width: 36px; height: 36px; border-color: #ff6a3f; background: radial-gradient(circle, rgba(255,210,94,.8), rgba(211,63,36,.25) 45%, transparent 70%); box-shadow: 0 0 25px #e95031; }
+.impact-flash.self-destruct { width: 54px; height: 54px; border: 3px solid #ff7047; background: radial-gradient(circle, #fff2aa 0 9%, rgba(255,174,59,.92) 10% 27%, rgba(202,54,34,.55) 28% 49%, transparent 70%); box-shadow: 0 0 18px #ffdd75, 0 0 38px #df4a2d; animation: self-destruct-blast .72s ease-out forwards; }
+.impact-flash.self-destruct i { width: 25px; height: 3px; background: #fff0a4; box-shadow: 0 0 8px #ff8b3e; }
 .impact-flash.frost { width: 27px; height: 27px; border-color: #8ee8f5; box-shadow: 0 0 20px #78d9ec; }.impact-flash.frost i { background: #c5f8ff; }
 .impact-flash.shatter { border-color: #a9dd7f; box-shadow: 0 0 18px #87c963; transform: translate(-50%,-50%) rotate(45deg); border-radius: 2px; }.impact-flash.shatter i { background: #c8efaa; }
 .impact-flash.arcane { border-color: #79d9f0; box-shadow: 0 0 16px #4eb9d5; }
@@ -1041,10 +1045,13 @@ button:focus-visible {
 @keyframes flag { to { transform: scaleX(.78) skewY(-4deg); } }
 @keyframes recoil { 40% { transform: rotate(var(--aim-angle, -.08rad)) translateX(-7px); } }
 @keyframes fortress-hit { 30% { transform: translateX(-4px); filter: brightness(1.5) sepia(1); } 60% { transform: translateX(4px); } }
+@keyframes fortress-breach { 18% { transform: translateX(-9px) rotate(-1deg); filter: brightness(1.8) sepia(1); } 38% { transform: translateX(8px) rotate(1deg); } 62% { transform: translateX(-5px); filter: brightness(1.25) sepia(.5); } 82% { transform: translateX(3px); } }
 @keyframes enemy-hit { 50% { transform: translateX(-50%) translateX(5px); filter: brightness(2); } }
 @keyframes enemy-dead { to { opacity: 0; transform: translateX(-50%) translateY(25px) rotate(20deg) scale(.6); } }
+@keyframes enemy-self-destruct { 0% { filter: brightness(1); } 34% { opacity: 1; filter: brightness(3) saturate(1.8); transform: translateX(-50%) scale(1.24); } 100% { opacity: 0; filter: brightness(4); transform: translateX(-50%) scale(.15) rotate(18deg); } }
 @keyframes projectile-fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--angle)); opacity: .2; } }
 @keyframes impact-ring { from { opacity: 1; transform: translate(-50%,-50%) scale(.25); } 45% { opacity: 1; } to { opacity: 0; transform: translate(-50%,-50%) scale(1.8) rotate(30deg); } }
+@keyframes self-destruct-blast { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.12); } 18% { opacity: 1; transform: translate(-50%,-50%) scale(.72); } 52% { opacity: 1; transform: translate(-50%,-50%) scale(1.18) rotate(12deg); } 100% { opacity: 0; transform: translate(-50%,-50%) scale(1.8) rotate(28deg); } }
 @keyframes buff-enter { from { opacity: 0; transform: translateX(14px) scale(.92); } }
 @keyframes relic-pulse { to { transform: scale(1.12) rotate(8deg); box-shadow: 0 0 0 5px rgba(240,193,78,.08), 0 0 18px currentColor; } }
 @keyframes relic-rune-trigger { to { transform: scale(1.32) rotate(16deg); filter: brightness(1.45); box-shadow: 0 0 0 6px rgba(255, 239, 172, .13), 0 0 22px currentColor; } }

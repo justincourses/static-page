@@ -401,8 +401,41 @@ let activeBrowser;
       targetAttack: document.querySelector('#targetAttack').textContent
     };
   });
-  if (!enteredTargeting.entered.every((enemy) => enemy.entered && enemy.x <= 98) || enteredTargeting.dossierEmpty || enteredTargeting.targetName !== offstageTargeting.spawned.name || Number(enteredTargeting.targetAttack) <= 0) throw new Error(`Enemy was not acquired after entering the field: ${JSON.stringify(enteredTargeting)}`);
+  if (!enteredTargeting.entered.every((enemy) => enemy.entered && enemy.x <= 98) || enteredTargeting.dossierEmpty || enteredTargeting.targetName !== offstageTargeting.spawned.name || Number(enteredTargeting.targetAttack) <= 0 || await page.locator('.target-stats > div:first-child span').innerText() !== '伤害') throw new Error(`Enemy was not acquired with a clear damage value after entering the field: ${JSON.stringify(enteredTargeting)}`);
+  const selfDestruct = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    test.clearEnemies();
+    test.setEquipment('armor', 3);
+    const result = test.breachEnemy('assault');
+    const damageToasts = [...document.querySelectorAll('.combat-toast.damage')];
+    const feedback = {
+      toast: damageToasts.at(-1)?.textContent || '',
+      log: document.querySelector('#battleLog').innerText,
+      impactAttached: Boolean(document.querySelector('.impact-flash.self-destruct')),
+      enemyAnimating: Boolean(document.querySelector('.enemy.is-self-destructing')),
+      wallText: document.querySelector('#wallValue').textContent,
+      ruleText: document.querySelector('#rulesModal').textContent
+    };
+    test.setEquipment('armor', 1);
+    return { result, feedback };
+  });
+  if (!selfDestruct.result || selfDestruct.result.actualDamage !== selfDestruct.result.expectedDamage || selfDestruct.result.wallAfter !== selfDestruct.result.wallBefore - selfDestruct.result.expectedDamage || !selfDestruct.result.removedFromBattle || !selfDestruct.result.selfDestructing) throw new Error(`Enemy self-destruct damage is incorrect: ${JSON.stringify(selfDestruct)}`);
+  if (!selfDestruct.feedback.impactAttached || !selfDestruct.feedback.enemyAnimating || selfDestruct.feedback.toast !== `自爆 -${selfDestruct.result.expectedDamage}` || !selfDestruct.feedback.log.includes(`基础伤害 ${selfDestruct.result.baseDamage}`) || Number(selfDestruct.feedback.wallText) !== selfDestruct.result.wallAfter || !selfDestruct.feedback.ruleText.includes('面板中的伤害数值')) throw new Error(`Enemy self-destruct feedback or rule explanation is incomplete: ${JSON.stringify(selfDestruct)}`);
   await page.locator('#pauseButton').click();
+  await page.waitForTimeout(160);
+  const selfDestructVisual = await page.evaluate(() => {
+    const impact = document.querySelector('.impact-flash.self-destruct');
+    const enemy = document.querySelector('.enemy.is-self-destructing');
+    return {
+      impactOpacity: impact ? Number(getComputedStyle(impact).opacity) : 0,
+      impactSize: impact ? impact.getBoundingClientRect().width : 0,
+      enemyOpacity: enemy ? Number(getComputedStyle(enemy).opacity) : 0,
+      fortressBreached: document.querySelector('#fortress').classList.contains('is-breached'),
+      toastVisible: [...document.querySelectorAll('.combat-toast.damage')].some((node) => node.textContent.startsWith('自爆 -') && Number(getComputedStyle(node).opacity) > 0)
+    };
+  });
+  if (selfDestructVisual.impactOpacity < .5 || selfDestructVisual.impactSize < 40 || selfDestructVisual.enemyOpacity < .3 || !selfDestructVisual.fortressBreached || !selfDestructVisual.toastVisible) throw new Error(`Enemy self-destruct animation is not perceptible: ${JSON.stringify(selfDestructVisual)}`);
+  await page.screenshot({ path: path.join(output, 'enemy-self-destruct.png'), fullPage: false });
 
   await page.waitForTimeout(1500);
   if (await page.locator('.enemy').count() < 1) await page.evaluate(() => window.__runeRampartTest.spawnEnemy('assault'));
@@ -418,7 +451,7 @@ let activeBrowser;
     if (await page.locator(`.enemy.${type}`).count() < 1) throw new Error(`Distinct ${type} enemy did not render`);
   }
   if (await page.locator('#targetDossier').evaluate((node) => node.classList.contains('is-empty'))) throw new Error('Target dossier did not acquire an enemy');
-  if (Number(await page.locator('#targetAttack').innerText()) <= 0) throw new Error('Enemy attack is not displayed');
+  if (Number(await page.locator('#targetAttack').innerText()) <= 0) throw new Error('Enemy breach damage is not displayed');
   if (Number(await page.locator('#targetDefense').innerText()) < 0) throw new Error('Enemy defense is not displayed');
   if ((await page.locator('.enemy-label').first().innerText()).length < 3) throw new Error('Enemy name is missing');
   const aimAngle = await page.locator('#fortress').evaluate((node) => node.style.getPropertyValue('--aim-angle'));
@@ -505,7 +538,17 @@ let activeBrowser;
       medianVeteran: test.simulateBalance('veteran', 1.3),
       skilledVeteran: test.simulateBalance('veteran', 1.5),
       strongMaster: test.simulateBalance('master', 2),
-      eliteMaster: test.simulateBalance('master', 2.25)
+      eliteMaster: test.simulateBalance('master', 2.25),
+      breachProfiles: {
+        rookieOpening: test.breachDamageProfile('assault', 1, 'rookie', 1),
+        veteranOpening: test.breachDamageProfile('assault', 1, 'veteran', 1),
+        masterOpening: test.breachDamageProfile('assault', 1, 'master', 1),
+        masterOpeningBoss: test.breachDamageProfile('boss', 1, 'master', 1),
+        masterMid: test.breachDamageProfile('assault', 50, 'master', 5),
+        masterMidBoss: test.breachDamageProfile('boss', 50, 'master', 5),
+        masterLate: test.breachDamageProfile('assault', 100, 'master', 10),
+        masterLateBoss: test.breachDamageProfile('boss', 100, 'master', 10)
+      }
     };
   });
   for (const sample of balance.samples) {
@@ -533,6 +576,11 @@ let activeBrowser;
     return profile.enemyCount * profile.hpScale * profile.speedScale * (1 + profile.advancedChance);
   });
   if (!(openingPressure[1] > openingPressure[0] * 2.5 && openingPressure[2] > openingPressure[1] * 2)) throw new Error(`Difficulty tiers are not meaningfully separated: ${JSON.stringify({ wave1, openingPressure })}`);
+  const breach = balance.breachProfiles;
+  if (!(breach.masterOpening.finalDamage > breach.veteranOpening.finalDamage && breach.veteranOpening.finalDamage > breach.rookieOpening.finalDamage)) throw new Error(`Opening breach damage does not scale by difficulty: ${JSON.stringify(breach)}`);
+  if (breach.rookieOpening.hitsToBreak < 20 || breach.veteranOpening.hitsToBreak < 15 || breach.masterOpening.hitsToBreak < 12 || breach.masterOpeningBoss.hitsToBreak < 6) throw new Error(`Opening enemies can erase the wall in too few breaches: ${JSON.stringify(breach)}`);
+  if (breach.masterMid.hitsToBreak < 12 || breach.masterLate.hitsToBreak < 12 || breach.masterMidBoss.hitsToBreak < 6 || breach.masterLateBoss.hitsToBreak < 6) throw new Error(`Mid/late breach damage grows too aggressively for reasonable defense investment: ${JSON.stringify(breach)}`);
+  if ([breach.masterMid, breach.masterLate, breach.masterMidBoss, breach.masterLateBoss].some((sample) => sample.finalDamage >= sample.displayedDamage || sample.hitsToBreak < 1)) throw new Error(`Defense is not applied to breach damage: ${JSON.stringify(breach)}`);
   if (!wave10.isBossWave || wave11.stage !== wave10.stage + 1 || !(wave11.hpScale > wave10.hpScale)) throw new Error('Ten-wave step-up is not calibrated');
   if (wave100.stage !== 10 || wave100.bossCount !== 3 || wave100.batchSize !== 5 || wave100.requiredGroups !== 23) throw new Error(`Wave 100 profile is incorrect: ${JSON.stringify(wave100)}`);
   balance.masterCurve.forEach((profile, index) => {

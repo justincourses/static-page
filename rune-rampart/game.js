@@ -59,11 +59,11 @@
     }
   };
   const BASE_ENEMY_STATS = {
-    raider: { hp: 100, speed: 3, damage: 55, defense: 3, role: '荒原劫掠者 · 均衡型', roleIcon: '◆' },
-    swift: { hp: 70, speed: 5.4, damage: 38, defense: 1, role: '影袭斥候 · 速度型', roleIcon: '»' },
-    assault: { hp: 120, speed: 3.5, damage: 95, defense: 2, role: '血斧先锋 · 攻击型', roleIcon: '†' },
-    brute: { hp: 210, speed: 2, damage: 65, defense: 13, role: '披甲蛮兵 · 防御型', roleIcon: '◇' },
-    boss: { hp: 1050, speed: 1.4, damage: 210, defense: 20, role: '攻城巨兽 · BOSS', roleIcon: '♛' }
+    raider: { hp: 100, speed: 3, damage: 28, defense: 3, role: '荒原劫掠者 · 均衡型', roleIcon: '◆' },
+    swift: { hp: 70, speed: 5.4, damage: 18, defense: 1, role: '影袭斥候 · 速度型', roleIcon: '»' },
+    assault: { hp: 120, speed: 3.5, damage: 44, defense: 2, role: '血斧先锋 · 攻击型', roleIcon: '†' },
+    brute: { hp: 210, speed: 2, damage: 32, defense: 13, role: '披甲蛮兵 · 防御型', roleIcon: '◇' },
+    boss: { hp: 1050, speed: 1.4, damage: 96, defense: 20, role: '攻城巨兽 · BOSS', roleIcon: '♛' }
   };
   const RELICS = {
     blast: { name: '爆裂符文', icon: '✹', description: '命中产生范围伤害', className: 'blast' },
@@ -1051,7 +1051,9 @@
       enemyCount: Math.max(7, Math.round(baseCount * difficulty.pressure)),
       advancedChance: clamp(.48 + (safeWave - 1) * .0025 + tier * .035 + difficulty.eliteOffset, .18, difficulty.eliteCap),
       hpScale: (1 + (safeWave - 1) * .035) * (1 + tier * .08) * difficulty.statScale * difficulty.durabilityScale,
-      damageScale: (1 + (safeWave - 1) * .032) * (1 + tier * .13) * difficulty.statScale,
+      // Breach damage grows more slowly than durability so a few leaks hurt
+      // without making late waves collapse the wall in two or three hits.
+      damageScale: (1 + (safeWave - 1) * .018) * (1 + tier * .07) * difficulty.statScale,
       defenseScale: (1 + (safeWave - 1) * .018) * (1 + tier * .06) * difficulty.statScale,
       speedScale: (1 + (safeWave - 1) * .0015 + tier * .015) * difficulty.speedFactor,
       batchSize: 1 + Math.floor(tier / difficulty.batchDivisor),
@@ -1623,8 +1625,33 @@
     return `${attackRate()}/秒 · ${volleyLabel()}`;
   }
 
+  function wallDefenseForLevel(level = 1) {
+    return Math.min(72, 6 + (Math.max(1, Math.floor(Number(level) || 1)) - 1) * 6);
+  }
+
   function wallDefense() {
-    return Math.min(72, 6 + (state.equipment.armor - 1) * 6);
+    return wallDefenseForLevel(state.equipment.armor);
+  }
+
+  function breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
+    const stats = BASE_ENEMY_STATS[type] || BASE_ENEMY_STATS.raider;
+    const profile = getWaveProfile(wave, difficulty);
+    const safeArmorLevel = Math.max(1, Math.floor(Number(armorLevel) || 1));
+    const defense = wallDefenseForLevel(safeArmorLevel);
+    const wallMax = 1120 + (safeArmorLevel - 1) * 90;
+    const displayedDamage = Math.round(stats.damage * profile.damageScale);
+    const finalDamage = Math.max(1, Math.round(displayedDamage * (1 - defense / 100)));
+    return {
+      type,
+      wave: profile.wave,
+      difficulty,
+      armorLevel: safeArmorLevel,
+      defense,
+      wallMax,
+      displayedDamage,
+      finalDamage,
+      hitsToBreak: Math.ceil(wallMax / finalDamage)
+    };
   }
 
   function updateFieldHud() {
@@ -1797,7 +1824,7 @@
     const el = document.createElement('div');
     el.className = `enemy ${enemy.type}${enemy.relic ? ` relic-carrier relic-${enemy.relic}` : ''}`;
     el.dataset.id = enemy.id;
-    el.innerHTML = `<div class="enemy-hp"><span></span></div><span class="enemy-role-mark" aria-hidden="true">${enemy.roleIcon}</span><div class="enemy-body"><i class="horns"></i></div>${enemy.relic ? `<span class="relic-mark" title="携带${RELICS[enemy.relic].name}">${RELICS[enemy.relic].icon}</span>` : ''}<span class="enemy-stats-mini"><b>攻 ${enemy.damage}</b><b>防 ${enemy.defense}</b></span><span class="enemy-label">${enemy.name}</span>`;
+    el.innerHTML = `<div class="enemy-hp"><span></span></div><span class="enemy-role-mark" aria-hidden="true">${enemy.roleIcon}</span><div class="enemy-body"><i class="horns"></i></div>${enemy.relic ? `<span class="relic-mark" title="携带${RELICS[enemy.relic].name}">${RELICS[enemy.relic].icon}</span>` : ''}<span class="enemy-stats-mini"><b>伤 ${enemy.damage}</b><b>防 ${enemy.defense}</b></span><span class="enemy-label">${enemy.name}</span>`;
     els.enemiesLayer.appendChild(el);
     return el;
   }
@@ -2064,16 +2091,20 @@
     const position = state.enemies.indexOf(enemy);
     if (position < 0) return;
     state.enemies.splice(position, 1);
-    enemy.el.remove();
-    const damage = Math.max(1, Math.round(enemy.damage * (1 - wallDefense() / 100)));
+    enemy.el.classList.add('is-self-destructing');
+    scheduleGameTask(() => enemy.el.remove(), 440);
+    const defense = wallDefense();
+    const damage = Math.max(1, Math.round(enemy.damage * (1 - defense / 100)));
     state.wall -= damage;
-    sound.play('wall', .34, enemy.type === 'boss' ? .72 : .92);
-    sound.tone(enemy.type === 'boss' ? 58 : 82, .32, 'sawtooth', .035);
-    els.fortress.classList.remove('is-hit');
+    createImpactEffect(Math.max(13, enemy.x), enemy.y, 'self-destruct');
+    sound.play('wall', .52, enemy.type === 'boss' ? .62 : .8);
+    sound.tone(enemy.type === 'boss' ? 46 : 64, .42, 'sawtooth', .052);
+    sound.tone(enemy.type === 'boss' ? 78 : 106, .26, 'square', .034, .06);
+    els.fortress.classList.remove('is-hit', 'is-breached');
     void els.fortress.offsetWidth;
-    els.fortress.classList.add('is-hit');
-    showCombatToast(`城墙 -${damage}`, 'damage', 18, 48);
-    addLog(`${enemy.label}撞上城墙，防具减免后损失 ${damage} 耐久`);
+    els.fortress.classList.add('is-breached');
+    showCombatToast(`自爆 -${damage}`, 'damage', 18, 48);
+    addLog(`${enemy.label}抵达终点后自爆：基础伤害 ${enemy.damage}，城防减免 ${defense}% 后损失 ${damage} 耐久`);
     updateUI();
     if (state.wall <= 0) endGame();
   }
@@ -2536,6 +2567,34 @@
         const enemy = spawnEnemy(type, RELICS[relic] ? relic : null);
         return enemy ? { id: enemy.id, hp: enemy.hp, name: enemy.name, entered: enemy.entered, x: enemy.x } : null;
       },
+      breachEnemy(type = 'assault') {
+        if (!ENEMY_NAMES[type]) return null;
+        state.wall = state.wallMax;
+        state.waveQueue += 1;
+        const enemy = spawnEnemy(type, null);
+        if (!enemy) return null;
+        enemy.x = 15;
+        enemy.entered = true;
+        enemy.targetableAt = performance.now();
+        positionEnemy(enemy);
+        const wallBefore = state.wall;
+        const baseDamage = enemy.damage;
+        const defense = wallDefense();
+        const expectedDamage = Math.max(1, Math.round(baseDamage * (1 - defense / 100)));
+        enemyBreaches(enemy);
+        return {
+          id: enemy.id,
+          name: enemy.name,
+          baseDamage,
+          defense,
+          expectedDamage,
+          actualDamage: wallBefore - state.wall,
+          wallBefore,
+          wallAfter: state.wall,
+          removedFromBattle: !state.enemies.includes(enemy),
+          selfDestructing: enemy.el.classList.contains('is-self-destructing')
+        };
+      },
       enterAllEnemies() {
         const now = performance.now();
         state.enemies.forEach((enemy) => {
@@ -2549,6 +2608,9 @@
       },
       waveProfile(wave, difficulty = 'master') {
         return getWaveProfile(wave, difficulty);
+      },
+      breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
+        return breachDamageProfile(type, wave, difficulty, armorLevel);
       },
       simulateBalance(difficulty = 'master', efficiency = 1) {
         return simulateBalance(difficulty, efficiency);
