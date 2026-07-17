@@ -29,32 +29,32 @@
         </div>
 
         <div class="campaign-stats" aria-label="战局数据">
-          <div class="stat-stamp difficulty-stamp">
+          <div class="stat-stamp difficulty-stamp" data-tooltip-key="difficulty">
             <span>难度</span>
             <strong id="difficultyValue">新手</strong>
           </div>
-          <div class="stat-stamp">
+          <div class="stat-stamp" data-tooltip-key="wave">
             <span>波次 / 100</span>
             <strong id="waveValue">001</strong>
           </div>
-          <div class="stat-stamp">
+          <div class="stat-stamp" data-tooltip-key="kills">
             <span>歼敌</span>
             <strong id="killValue">000</strong>
           </div>
-          <div class="stat-stamp score-stamp">
+          <div class="stat-stamp score-stamp" data-tooltip-key="score">
             <span>军功</span>
             <strong id="scoreValue">00000</strong>
           </div>
         </div>
 
         <div class="header-actions">
-          <button class="text-button" id="helpButton" type="button">
+          <button class="text-button" id="helpButton" type="button" data-tooltip-key="campaignOptions">
             <span class="restart-long">战役选项</span><span class="restart-short" aria-hidden="true">重开</span>
           </button>
-          <button class="icon-button rules-button" id="rulesButton" type="button" aria-label="查看游戏规则" title="查看游戏规则">
+          <button class="icon-button rules-button" id="rulesButton" type="button" aria-label="查看游戏规则" data-tooltip-key="rules">
             <span aria-hidden="true">?</span>
           </button>
-          <button class="icon-button" id="fullscreenButton" type="button" aria-label="进入全屏" title="进入全屏">
+          <button class="icon-button" id="fullscreenButton" type="button" aria-label="进入全屏" data-tooltip-key="fullscreen">
             <span aria-hidden="true">⛶</span>
           </button>
           <div class="music-controls" role="group" aria-label="MIDI 军乐控制">
@@ -70,28 +70,28 @@
               <span>下一首 · <strong id="musicNextTitle">山王逼近 · 山魔王宫殿</strong></span>
             </span>
           </div>
-          <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭音效" title="关闭音效">
+          <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭音效" data-tooltip-key="sound">
             <span class="sound-icon" aria-hidden="true">♪</span>
           </button>
-          <button class="icon-button" id="pauseButton" type="button" aria-label="暂停游戏" title="暂停游戏">
+          <button class="icon-button" id="pauseButton" type="button" aria-label="暂停游戏" data-tooltip-key="pause">
             <span class="pause-icon">Ⅱ</span>
           </button>
         </div>
       </header>
 
       <section class="status-rail" aria-label="堡垒状态">
-        <div class="wall-status">
+        <div class="wall-status" data-tooltip-key="wall">
           <div class="meter-copy">
             <span>城墙耐久</span>
-            <strong><span id="wallValue">1000</span> / <span id="wallMaxValue">1000</span></strong>
+            <strong><span id="wallValue">1000</span> / <span id="wallMaxValue">1000</span><em class="shield-rail-value">盾 <b id="shieldRailValue">0</b></em></strong>
           </div>
-          <div class="meter-track wall-track"><span id="wallMeter"></span></div>
+          <div class="meter-track wall-track"><span id="wallMeter"></span><i id="shieldMeter" aria-hidden="true"></i></div>
         </div>
         <div class="threat-status">
           <span class="pulse-dot"></span>
           <span id="threatText">第一波斥候正在逼近</span>
         </div>
-        <div class="pressure-status">
+        <div class="pressure-status" data-tooltip-key="pressure">
           <span id="pressureTierValue">第 1 阶段</span>
           <strong><b id="waveMatchValue">0</b> / <b id="waveMatchTarget">4</b> 组</strong>
           <small id="powerDelta">本波建议消除量</small>
@@ -105,17 +105,17 @@
               <span class="eyebrow">符文工坊 / 01</span>
               <h2 id="runeTitle">调度符文</h2>
             </div>
-            <div class="combo-badge" id="comboBadge">
+            <div class="combo-badge" id="comboBadge" data-tooltip-key="combo">
               <span>连锁</span>
               <strong id="comboValue">×1</strong>
             </div>
           </div>
 
           <div class="rune-legend" aria-label="符文效果">
-            <div class="legend-item ember" title="每枚红曜石提供 1 次余烬齐射，开火消耗 1 次"><i>◆</i><span>余烬</span><strong id="emberValue">0</strong></div>
-            <div class="legend-item mana" title="蓝晶转化为奥能；消耗 18 点发动全场齐射"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
-            <div class="legend-item moss" title="绿晶立即修复城墙，此处显示本局累计有效修复"><i>⬟</i><span>修复</span><strong id="repairValue">0</strong></div>
-            <div class="legend-item coin" title="所有消除都会推进补强；铸币组额外增加 1 点"><i>●</i><span>补强</span><strong id="forgeValue">0</strong></div>
+            <div class="legend-item ember" data-tooltip-key="ember"><i>◆</i><span>余烬</span><strong id="emberValue">0</strong></div>
+            <div class="legend-item mana" data-tooltip-key="mana"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
+            <div class="legend-item moss" data-tooltip-key="shield"><i>⬟</i><span>护盾</span><strong id="shieldValue">0</strong></div>
+            <div class="legend-item coin" data-tooltip-key="forge"><i>●</i><span>补强</span><strong id="forgeValue">0</strong></div>
           </div>
 
           <div class="board-frame">
@@ -142,7 +142,7 @@
               <span class="eyebrow">百波战场 / 02</span>
               <h2 id="battleTitle">顶住这一波</h2>
             </div>
-            <div class="wave-chip"><span id="waveState">敌军 0 / 7</span><i></i></div>
+            <div class="wave-chip" data-tooltip-key="waveState"><span id="waveState">敌军 0 / 7</span><i></i></div>
           </div>
 
           <div class="battlefield" id="battlefield" aria-label="塔防战场">
@@ -165,18 +165,18 @@
                   <small id="targetRole">尚未发现敌军</small>
                 </div>
                 <div class="target-stats">
-                  <div><span>伤害</span><b id="targetAttack">—</b></div>
-                  <div><span>防御</span><b id="targetDefense">—</b></div>
-                  <div><span>生命</span><b id="targetHealth">—</b></div>
+                  <div data-tooltip-key="targetDamage"><span>伤害</span><b id="targetAttack">—</b></div>
+                  <div data-tooltip-key="targetDefense"><span>防御</span><b id="targetDefense">—</b></div>
+                  <div data-tooltip-key="targetHealth"><span>生命</span><b id="targetHealth">—</b></div>
                 </div>
                 <div class="target-health-track"><span id="targetHealthMeter"></span></div>
               </aside>
             </div>
 
             <section class="field-hud" aria-label="我方战斗属性">
-              <div class="field-hud-stat attack" title="我方攻击力"><i aria-hidden="true">⌁</i><span>攻</span><b id="hudAttack">27</b></div>
-              <div class="field-hud-stat defense" title="城墙减伤"><i aria-hidden="true">◇</i><span>防</span><b id="hudDefense">6%</b></div>
-              <div class="field-hud-stat speed" title="每秒攻击次数"><i aria-hidden="true">»</i><span>速</span><b id="hudSpeed">1.0</b></div>
+              <div class="field-hud-stat attack" data-tooltip-key="allyAttack"><i aria-hidden="true">⌁</i><span>攻</span><b id="hudAttack">27</b></div>
+              <div class="field-hud-stat defense" data-tooltip-key="allyDefense"><i aria-hidden="true">◇</i><span>防</span><b id="hudDefense">6%</b></div>
+              <div class="field-hud-stat speed" data-tooltip-key="allySpeed"><i aria-hidden="true">»</i><span>速</span><b id="hudSpeed">1.0</b></div>
             </section>
             <div class="combat-buffs" id="combatBuffs" aria-live="polite"></div>
 
@@ -203,12 +203,12 @@
           </div>
 
           <div class="tactics-row">
-            <button class="skill-card" id="volleyButton" type="button" disabled>
+            <button class="skill-card" id="volleyButton" type="button" data-tooltip-key="arcaneVolley" disabled>
               <span class="skill-icon">✦</span>
               <span><strong>奥术齐射</strong><small>全场伤害 · 消耗 18 奥能</small></span>
               <kbd>Q</kbd>
             </button>
-            <div class="next-wave">
+            <div class="next-wave" data-tooltip-key="nextWave">
               <span>下一批敌军</span>
               <strong id="nextWaveValue">交战中</strong>
             </div>
@@ -226,29 +226,29 @@
                 <span>下一次升级</span>
                 <small id="strategyHint">自动 · 本次攻击</small>
               </div>
-              <div class="forge-meter-wrap" aria-label="补强进度">
+              <div class="forge-meter-wrap" aria-label="补强进度" data-tooltip-key="forgeProgress">
                 <span><em id="forgeTargetName">攻击 LV.1→2</em><b id="forgeProgressText">0 / 26</b></span>
                 <div class="meter-track forge-track"><span id="forgeMeter"></span></div>
               </div>
               <div class="strategy-options" role="group" aria-label="选择升级优先级">
-                <button class="strategy-button is-active" type="button" data-upgrade="auto" aria-pressed="true"><i>✦</i>自动</button>
-                <button class="strategy-button" type="button" data-upgrade="weapon" aria-pressed="false"><i>⌁</i>攻击</button>
-                <button class="strategy-button" type="button" data-upgrade="armor" aria-pressed="false"><i>◇</i>防御</button>
-                <button class="strategy-button" type="button" data-upgrade="charm" aria-pressed="false"><i>»</i>攻速</button>
+                <button class="strategy-button is-active" type="button" data-upgrade="auto" data-tooltip-key="upgradeStrategy" aria-pressed="true"><i>✦</i>自动</button>
+                <button class="strategy-button" type="button" data-upgrade="weapon" data-tooltip-key="upgradeStrategy" aria-pressed="false"><i>⌁</i>攻击</button>
+                <button class="strategy-button" type="button" data-upgrade="armor" data-tooltip-key="upgradeStrategy" aria-pressed="false"><i>◇</i>防御</button>
+                <button class="strategy-button" type="button" data-upgrade="charm" data-tooltip-key="upgradeStrategy" aria-pressed="false"><i>»</i>攻速</button>
               </div>
             </div>
             <section class="battle-loadout" aria-label="当前军械数值">
-              <article class="loadout-stat weapon-card" id="weaponCard">
+              <article class="loadout-stat weapon-card" id="weaponCard" data-tooltip-key="weaponLoadout">
                 <span>弩炮 · LV.<b id="weaponLevel">1</b></span>
                 <strong id="weaponStat">攻击 27</strong>
                 <small id="weaponName">新兵弩</small>
               </article>
-              <article class="loadout-stat charm-card" id="charmCard">
+              <article class="loadout-stat charm-card" id="charmCard" data-tooltip-key="charmLoadout">
                 <span>射速 · LV.<b id="charmLevel">1</b></span>
                 <strong id="charmStat">1.0/秒 · 单发</strong>
                 <small id="charmName">斥候号角</small>
               </article>
-              <article class="loadout-stat armor-card" id="armorCard">
+              <article class="loadout-stat armor-card" id="armorCard" data-tooltip-key="armorLoadout">
                 <span>城防 · LV.<b id="armorLevel">1</b></span>
                 <strong id="armorStat">减伤 6%</strong>
                 <small id="armorName">橡木城栅</small>
@@ -312,7 +312,7 @@
         <div class="briefing-rules">
           <div><i class="ember">◆</i><span><b>红曜石</b>每枚储备 1 次余烬齐射，整轮伤害 +25%</span></div>
           <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，发动全场齐射</span></div>
-          <div><i class="moss">⬟</i><span><b>绿晶</b>即时修复受损城墙</span></div>
+          <div><i class="moss">⬟</i><span><b>绿晶</b>先补耐久，溢出能量转为护盾</span></div>
           <div><i class="coin">●</i><span><b>补强</b>每组消除均推进；长连和铸币组额外增加</span></div>
         </div>
         <p class="briefing-music-note"><b>♫ 20 首 MIDI 军乐</b><span>科罗贝尼基 · 欢乐颂 · 四季 · 传统民谣 · 原创战曲 / 自动循环，可随时切歌</span></p>
@@ -354,7 +354,7 @@
             <ul>
               <li>交换相邻符文，连成 3 枚或以上即可消除。</li>
               <li>每个消除组提供 1 点补强；四连额外 +1，五连及以上额外 +2，铸币组再额外 +1。</li>
-              <li>红曜石储备余烬齐射，蓝晶积蓄奥能，绿晶即时修复城墙。</li>
+              <li>红曜石储备余烬齐射，蓝晶积蓄奥能；绿晶先补足耐久，剩余点数转为护盾，护盾上限为耐久上限的 50%。</li>
             </ul>
           </section>
 
@@ -363,6 +363,7 @@
             <ul>
               <li>攻击、防御、攻速分别按自身等级计算下一级费用，等级越高费用越高。</li>
               <li>切换优先目标不会损失已有补强；“自动”会为本次升级选定目标，升级后再重选。</li>
+              <li>防御每升一级增加减伤，并使城墙耐久上限 +90、同步修复最多 90 点。</li>
               <li>补强增加与升级消费都会在 HUD、数值动画和军情中明确反馈。</li>
             </ul>
           </section>
@@ -371,7 +372,7 @@
             <h3><i aria-hidden="true">⌁</i> 城防战斗</h3>
             <ul>
               <li>尚未进入战场的敌人无法被锁定；进场后弩炮会自动瞄准最接近城墙的目标。</li>
-              <li>未被消灭的敌人抵达终点会自爆，先按面板中的伤害数值结算，再应用城防减伤。</li>
+              <li>未被消灭的敌人抵达终点会自爆：先应用城防减伤，再消耗护盾，最后才扣耐久。</li>
               <li>敌军分速度、攻击、防御、均衡与 Boss 型，外观和战斗属性各不相同。</li>
               <li>攻速提高后会逐步变为多枚齐射；奥能达到 18 点可发动全场攻击。</li>
             </ul>
@@ -463,6 +464,12 @@
         </div>
         <button class="primary-button" id="victoryRestartButton" type="button"><span>再次挑战</span><small>重新选择难度</small></button>
       </div>
+    </div>
+
+    <div class="context-tooltip" id="contextTooltip" role="tooltip" aria-hidden="true">
+      <span class="context-tooltip-kicker">战场提示 / FIELD NOTE</span>
+      <strong id="contextTooltipTitle">状态说明</strong>
+      <span id="contextTooltipBody">将鼠标移到战场模块上查看规则与当前状态。</span>
     </div>
 
     <script src="./game.js"></script>

@@ -110,6 +110,30 @@ let activeBrowser;
   if (await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound should start enabled');
   if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'true') throw new Error('MIDI music should start enabled');
   if (!await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music sequencer did not start with the battle');
+  if (await page.locator('[data-tooltip-key]').count() < 25) throw new Error('Too few game controls and status modules expose contextual hover tips');
+  await page.locator('.wall-status').hover();
+  await page.waitForTimeout(180);
+  const wallTooltip = await page.locator('#contextTooltip').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      visible: node.classList.contains('is-visible'),
+      ariaHidden: node.getAttribute('aria-hidden'),
+      text: node.textContent.replace(/\s+/g, ' ').trim(),
+      position: getComputedStyle(node).position,
+      rect: rect.toJSON(),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      fontSizes: [...node.querySelectorAll('*')].map((child) => Number.parseFloat(getComputedStyle(child).fontSize))
+    };
+  });
+  if (!wallTooltip.visible || wallTooltip.ariaHidden !== 'false' || wallTooltip.position !== 'fixed' || !wallTooltip.text.includes('城墙 1120 / 1120') || !wallTooltip.text.includes('城防减伤 6%') || wallTooltip.rect.left < 0 || wallTooltip.rect.top < 0 || wallTooltip.rect.right > wallTooltip.viewport.width || wallTooltip.rect.bottom > wallTooltip.viewport.height || wallTooltip.fontSizes.some((size) => size < 14)) throw new Error(`Wall hover tip is incomplete or out of bounds: ${JSON.stringify(wallTooltip)}`);
+  await page.screenshot({ path: path.join(output, 'context-tooltip.png'), fullPage: false });
+  await page.locator('#pauseButton').focus();
+  await page.waitForTimeout(30);
+  const focusedTooltip = await page.locator('#contextTooltip').innerText();
+  if (!focusedTooltip.includes('立即暂停') || !focusedTooltip.includes('立即冻结敌军') || await page.locator('#pauseButton').getAttribute('aria-describedby') !== 'contextTooltip') throw new Error(`Keyboard-focused pause tooltip is incomplete: ${focusedTooltip}`);
+  if (await page.locator('#pauseButton').getAttribute('title') !== null || await page.locator('#soundButton').getAttribute('title') !== null || await page.locator('#fullscreenButton').getAttribute('title') !== null) throw new Error('Native titles can overlap the custom contextual tooltip');
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.mouse.move(0, 0);
   const playlistCycle = await page.evaluate(() => {
     const test = window.__runeRampartTest;
     const before = test.musicState();
@@ -215,8 +239,28 @@ let activeBrowser;
   await page.locator('[data-upgrade="auto"]').click();
   const autoTarget = await page.evaluate(() => ({ snapshot: window.__runeRampartTest.snapshot(), hint: document.querySelector('#strategyHint').textContent }));
   if (autoTarget.snapshot.upgradeTargetSlot !== 'armor' || autoTarget.snapshot.forgeTarget !== 26 || !autoTarget.hint.includes('本次防御')) throw new Error(`Auto mode did not internally choose and display its current target: ${JSON.stringify(autoTarget)}`);
+  const armorUpgrade = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    const before = test.snapshot();
+    test.grantForge();
+    const after = test.snapshot();
+    return {
+      before,
+      after,
+      log: document.querySelector('#battleLog').innerText,
+      wallAnimating: document.querySelector('.wall-status').classList.contains('is-upgraded'),
+      armorAnimating: document.querySelector('#armorCard').classList.contains('is-upgraded'),
+      banner: document.querySelector('#equipmentUpgradeBanner').innerText
+    };
+  });
+  if (armorUpgrade.after.equipment.armor !== armorUpgrade.before.equipment.armor + 1 || armorUpgrade.after.wallMax !== armorUpgrade.before.wallMax + 90 || armorUpgrade.after.wall !== armorUpgrade.before.wall + 90 || !armorUpgrade.wallAnimating || !armorUpgrade.armorAnimating || !armorUpgrade.log.includes('耐久上限 +90') || !armorUpgrade.banner.includes('耐久上限 +90')) throw new Error(`Defense upgrade did not visibly add wall durability: ${JSON.stringify(armorUpgrade)}`);
+  await page.locator('#armorCard').dispatchEvent('pointerover', { relatedTarget: null });
+  await page.waitForTimeout(80);
+  const armorTooltip = await page.locator('#contextTooltip').innerText();
+  if (!armorTooltip.includes('耐久上限 +90') || !armorTooltip.includes('同步修复最多 90 点')) throw new Error(`Defense hover tip does not explain its durability benefit: ${armorTooltip}`);
+  await page.locator('#armorCard').evaluate((node) => node.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body })));
   await page.locator('[data-upgrade="weapon"]').click();
-  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
+  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选') && text.includes('耐久上限 +90'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
   const loadoutParent = await page.locator('#weaponCard').evaluate((node) => node.parentElement?.parentElement?.className);
   if (!loadoutParent?.includes('compact-arsenal')) throw new Error('Full weapon values are not grouped below the upgrade console');
   const weaponPower = (await page.locator('#weaponStat').innerText()).match(/\d+/)?.[0];
@@ -402,25 +446,50 @@ let activeBrowser;
     };
   });
   if (!enteredTargeting.entered.every((enemy) => enemy.entered && enemy.x <= 98) || enteredTargeting.dossierEmpty || enteredTargeting.targetName !== offstageTargeting.spawned.name || Number(enteredTargeting.targetAttack) <= 0 || await page.locator('.target-stats > div:first-child span').innerText() !== '伤害') throw new Error(`Enemy was not acquired with a clear damage value after entering the field: ${JSON.stringify(enteredTargeting)}`);
+  const shieldFlow = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    const baseline = test.snapshot();
+    test.setDefenseState(baseline.wallMax - 20, 0);
+    const support = test.grantMossSupport(50);
+    const snapshot = test.snapshot();
+    return {
+      support,
+      snapshot,
+      legend: document.querySelector('#shieldValue').textContent,
+      rail: document.querySelector('#shieldRailValue').textContent,
+      meterWidth: Number.parseFloat(document.querySelector('#shieldMeter').style.width),
+      log: document.querySelector('#battleLog').innerText,
+      ruleText: document.querySelector('#rulesModal').textContent
+    };
+  });
+  if (shieldFlow.support.restored !== 20 || shieldFlow.support.shieldGained !== 30 || shieldFlow.snapshot.wall !== shieldFlow.snapshot.wallMax || shieldFlow.snapshot.shield !== 30 || shieldFlow.legend !== '30' || shieldFlow.rail !== '30' || !(shieldFlow.meterWidth > 0) || !shieldFlow.log.includes('耐久 +20 · 护盾 +30') || !shieldFlow.ruleText.includes('剩余点数转为护盾') || !shieldFlow.ruleText.includes('再消耗护盾')) throw new Error(`Green rune did not repair first and convert overflow to shield: ${JSON.stringify(shieldFlow)}`);
+  await page.locator('.legend-item.moss').hover();
+  await page.waitForTimeout(80);
+  const shieldTooltip = await page.locator('#contextTooltip').innerText();
+  if (!shieldTooltip.includes(`护盾 30 / ${shieldFlow.snapshot.shieldMax}`) || !shieldTooltip.includes('先补足缺失耐久') || !shieldTooltip.includes('受到伤害时先扣护盾')) throw new Error(`Shield hover tip is incomplete: ${shieldTooltip}`);
+  await page.mouse.move(0, 0);
   const selfDestruct = await page.evaluate(() => {
     const test = window.__runeRampartTest;
     test.clearEnemies();
     test.setEquipment('armor', 3);
     const result = test.breachEnemy('assault');
     const damageToasts = [...document.querySelectorAll('.combat-toast.damage')];
+    const shieldToasts = [...document.querySelectorAll('.combat-toast.shield')];
     const feedback = {
-      toast: damageToasts.at(-1)?.textContent || '',
+      damageToast: damageToasts.at(-1)?.textContent || '',
+      shieldToast: shieldToasts.at(-1)?.textContent || '',
       log: document.querySelector('#battleLog').innerText,
       impactAttached: Boolean(document.querySelector('.impact-flash.self-destruct')),
       enemyAnimating: Boolean(document.querySelector('.enemy.is-self-destructing')),
       wallText: document.querySelector('#wallValue').textContent,
+      shieldText: document.querySelector('#shieldValue').textContent,
       ruleText: document.querySelector('#rulesModal').textContent
     };
     test.setEquipment('armor', 1);
     return { result, feedback };
   });
-  if (!selfDestruct.result || selfDestruct.result.actualDamage !== selfDestruct.result.expectedDamage || selfDestruct.result.wallAfter !== selfDestruct.result.wallBefore - selfDestruct.result.expectedDamage || !selfDestruct.result.removedFromBattle || !selfDestruct.result.selfDestructing) throw new Error(`Enemy self-destruct damage is incorrect: ${JSON.stringify(selfDestruct)}`);
-  if (!selfDestruct.feedback.impactAttached || !selfDestruct.feedback.enemyAnimating || selfDestruct.feedback.toast !== `自爆 -${selfDestruct.result.expectedDamage}` || !selfDestruct.feedback.log.includes(`基础伤害 ${selfDestruct.result.baseDamage}`) || Number(selfDestruct.feedback.wallText) !== selfDestruct.result.wallAfter || !selfDestruct.feedback.ruleText.includes('面板中的伤害数值')) throw new Error(`Enemy self-destruct feedback or rule explanation is incomplete: ${JSON.stringify(selfDestruct)}`);
+  if (!selfDestruct.result || selfDestruct.result.actualShieldAbsorb !== selfDestruct.result.expectedShieldAbsorb || selfDestruct.result.actualWallDamage !== selfDestruct.result.expectedWallDamage || selfDestruct.result.wallAfter !== selfDestruct.result.wallBefore - selfDestruct.result.expectedWallDamage || selfDestruct.result.shieldAfter !== selfDestruct.result.shieldBefore - selfDestruct.result.expectedShieldAbsorb || !selfDestruct.result.removedFromBattle || !selfDestruct.result.selfDestructing) throw new Error(`Enemy shield-first self-destruct damage is incorrect: ${JSON.stringify(selfDestruct)}`);
+  if (!selfDestruct.feedback.impactAttached || !selfDestruct.feedback.enemyAnimating || selfDestruct.feedback.shieldToast !== `护盾 -${selfDestruct.result.expectedShieldAbsorb}` || selfDestruct.feedback.damageToast !== `耐久 -${selfDestruct.result.expectedWallDamage}` || !selfDestruct.feedback.log.includes(`护盾吸收 ${selfDestruct.result.expectedShieldAbsorb}`) || Number(selfDestruct.feedback.wallText) !== selfDestruct.result.wallAfter || Number(selfDestruct.feedback.shieldText) !== selfDestruct.result.shieldAfter || !selfDestruct.feedback.ruleText.includes('先应用城防减伤，再消耗护盾，最后才扣耐久')) throw new Error(`Enemy self-destruct feedback or rule explanation is incomplete: ${JSON.stringify(selfDestruct)}`);
   await page.locator('#pauseButton').click();
   await page.waitForTimeout(160);
   const selfDestructVisual = await page.evaluate(() => {
@@ -431,10 +500,11 @@ let activeBrowser;
       impactSize: impact ? impact.getBoundingClientRect().width : 0,
       enemyOpacity: enemy ? Number(getComputedStyle(enemy).opacity) : 0,
       fortressBreached: document.querySelector('#fortress').classList.contains('is-breached'),
-      toastVisible: [...document.querySelectorAll('.combat-toast.damage')].some((node) => node.textContent.startsWith('自爆 -') && Number(getComputedStyle(node).opacity) > 0)
+      shieldToastVisible: [...document.querySelectorAll('.combat-toast.shield')].some((node) => node.textContent.startsWith('护盾 -') && Number(getComputedStyle(node).opacity) > 0),
+      damageToastVisible: [...document.querySelectorAll('.combat-toast.damage')].some((node) => node.textContent.startsWith('耐久 -') && Number(getComputedStyle(node).opacity) > 0)
     };
   });
-  if (selfDestructVisual.impactOpacity < .5 || selfDestructVisual.impactSize < 40 || selfDestructVisual.enemyOpacity < .3 || !selfDestructVisual.fortressBreached || !selfDestructVisual.toastVisible) throw new Error(`Enemy self-destruct animation is not perceptible: ${JSON.stringify(selfDestructVisual)}`);
+  if (selfDestructVisual.impactOpacity < .5 || selfDestructVisual.impactSize < 40 || selfDestructVisual.enemyOpacity < .3 || !selfDestructVisual.fortressBreached || !selfDestructVisual.shieldToastVisible || !selfDestructVisual.damageToastVisible) throw new Error(`Enemy self-destruct animation is not perceptible: ${JSON.stringify(selfDestructVisual)}`);
   await page.screenshot({ path: path.join(output, 'enemy-self-destruct.png'), fullPage: false });
 
   await page.waitForTimeout(1500);
@@ -474,7 +544,7 @@ let activeBrowser;
     snapshot: window.__runeRampartTest.snapshot(),
     save: JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null')
   }));
-  if (pausedState.save?.reason !== 'pause' || pausedState.save.wave !== pausedState.snapshot.wave || pausedState.save.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Pause checkpoint is incomplete: ${JSON.stringify(pausedState)}`);
+  if (pausedState.save?.reason !== 'pause' || pausedState.save.wave !== pausedState.snapshot.wave || pausedState.save.shield !== pausedState.snapshot.shield || pausedState.save.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Pause checkpoint is incomplete: ${JSON.stringify(pausedState)}`);
 
   const resumePage = await page.context().newPage({ viewport: { width: 980, height: 820 } });
   resumePage.on('pageerror', (error) => errors.push(`resume pageerror: ${error.message}`));
@@ -499,7 +569,7 @@ let activeBrowser;
     log: document.querySelector('#battleLog').innerText,
     lockVisible: document.querySelector('#boardLock').classList.contains('is-visible')
   }));
-  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.lockVisible || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Continue did not immediately resume the saved campaign: ${JSON.stringify({ pausedState, restoredState })}`);
+  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.lockVisible || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.shield !== pausedState.snapshot.shield || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Continue did not immediately resume the saved campaign: ${JSON.stringify({ pausedState, restoredState })}`);
   if (!restoredState.music.enabled || !restoredState.music.playing) throw new Error(`Music did not resume immediately: ${JSON.stringify(restoredState)}`);
   await resumePage.waitForTimeout(80);
   const runningAfterRestore = await resumePage.evaluate(() => window.__runeRampartTest.snapshot());
@@ -655,6 +725,21 @@ let activeBrowser;
   if (!landscapeMobileFit.compactLandscape || landscapeMobileFit.guardVisible || !(landscapeMobileFit.scale < 1)) throw new Error(`Mobile landscape did not use the fitted desktop canvas: ${JSON.stringify(landscapeMobileFit)}`);
   if (landscapeMobileFit.rect.left < -1 || landscapeMobileFit.rect.right > landscapeMobileFit.viewportWidth + 1 || landscapeMobileFit.rect.top < -1 || landscapeMobileFit.rect.bottom > landscapeMobileFit.viewportHeight + 1) throw new Error(`Mobile landscape canvas is not fully visible: ${JSON.stringify(landscapeMobileFit)}`);
   if (Math.abs(landscapeMobileFit.widthRatio - landscapeMobileFit.heightRatio) > .002) throw new Error(`Mobile landscape canvas is not scaled uniformly: ${JSON.stringify(landscapeMobileFit)}`);
+  await page.locator('.wall-status').hover();
+  await page.waitForTimeout(120);
+  const mobileTooltip = await page.locator('#contextTooltip').evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      visible: node.classList.contains('is-visible'),
+      rect: rect.toJSON(),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      text: node.textContent.replace(/\s+/g, ' ').trim(),
+      fontSizes: [node, ...node.querySelectorAll('*')].map((child) => Number.parseFloat(getComputedStyle(child).fontSize))
+    };
+  });
+  if (!mobileTooltip.visible || !mobileTooltip.text.includes('护盾') || mobileTooltip.rect.left < 0 || mobileTooltip.rect.right > mobileTooltip.viewport.width || mobileTooltip.rect.top < 0 || mobileTooltip.rect.bottom > mobileTooltip.viewport.height || mobileTooltip.fontSizes.some((size) => size < 14)) throw new Error(`Mobile contextual tooltip is clipped or illegible: ${JSON.stringify(mobileTooltip)}`);
+  await page.screenshot({ path: path.join(output, 'mobile-tooltip.png'), fullPage: false });
+  await page.mouse.move(0, 0);
   await page.screenshot({ path: path.join(output, 'mobile-landscape.png'), fullPage: false });
 
   await page.evaluate(() => document.querySelector('#rulesButton').click());

@@ -7,6 +7,7 @@
   const SECONDARY_BOLT_POWER = .45;
   const EMBER_CHARGE_CAP = 24;
   const EMBER_DAMAGE_MULTIPLIER = 1.25;
+  const SHIELD_MAX_RATIO = .5;
   const FORGE_START = 26;
   const FORGE_LEVEL_STEP = 10;
   const FORGE_LATE_STEP = 2;
@@ -226,7 +227,10 @@
     cascadeCallout: $('#cascadeCallout'),
     targetDossier: $('#targetDossier'),
     upgradeBanner: $('#equipmentUpgradeBanner'),
-    volleyButton: $('#volleyButton')
+    volleyButton: $('#volleyButton'),
+    contextTooltip: $('#contextTooltip'),
+    contextTooltipTitle: $('#contextTooltipTitle'),
+    contextTooltipBody: $('#contextTooltipBody')
   };
 
   const COMPACT_LANDSCAPE_CANVAS_WIDTH = 1180;
@@ -485,7 +489,7 @@
 
   const state = {
     board: [], boardRelics: [], selected: null, locked: false, started: false, paused: true, gameOver: false,
-    score: 0, kills: 0, wave: 1, emberCharges: 0, mana: 0, repaired: 0,
+    score: 0, kills: 0, wave: 1, emberCharges: 0, mana: 0, shield: 0, repaired: 0,
     forge: 0, forgeTarget: FORGE_START, equipment: { weapon: 1, armor: 1, charm: 1 },
     upgradeMode: 'auto', autoUpgradeIndex: 0, selectedDifficulty: 'rookie', difficulty: 'rookie',
     wall: 1120, wallMax: 1120, combo: 1, enemies: [], enemyId: 0,
@@ -500,7 +504,142 @@
   let currentSettlementId = null;
   let activeHistoryFilter = 'all';
   let rulesReturnFocus = null;
+  let contextTooltipTarget = null;
   const gameTasks = new Set();
+
+  function tooltipTargetEnemy() {
+    const enteredEnemies = state.enemies.filter((enemy) => enemy.entered);
+    return enteredEnemies.length
+      ? enteredEnemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest)
+      : null;
+  }
+
+  function contextTooltipModel(target) {
+    const key = target.dataset.tooltipKey;
+    const difficulty = DIFFICULTIES[state.difficulty] || DIFFICULTIES.rookie;
+    const profile = state.waveProfile || getWaveProfile(state.wave, state.difficulty);
+    const enemy = tooltipTargetEnemy();
+    const upgradeSlot = currentUpgradeSlot();
+    const upgradeLabel = upgradeSlotLabel(upgradeSlot);
+    const remainingEnemies = state.waveQueue + state.enemies.length;
+    const models = {
+      campaignOptions: {
+        title: '战役选项',
+        body: state.started
+          ? `当前为「${difficulty.name}」难度。打开后会立即暂停并保存；确认出征才会清除本局并重开。`
+          : '选择新手、老兵或大佬难度，再开始一场新的百波战役。'
+      },
+      rules: { title: '完整规则', body: '集中查看消除、补强、战斗、彩蛋、难度、排名与存档规则；打开时会暂停并保存。' },
+      fullscreen: { title: document.fullscreenElement ? '退出全屏' : '进入全屏', body: '切换显示模式，不会改变战局进度或暂停状态。' },
+      sound: { title: sound.muted ? '音效已关闭' : '音效已开启', body: `点击${sound.muted ? '开启' : '关闭'}射击、命中、消除与升级音效；MIDI 军乐单独控制。` },
+      pause: {
+        title: state.paused ? '战局已暂停' : '立即暂停',
+        body: state.paused ? '点击后从冻结点继续；刷新页面后选择继续也会直接恢复交战。' : '立即冻结敌军、射击、消除连锁和特效，并把当前状态保存到浏览器。'
+      },
+      difficulty: {
+        title: `难度 · ${difficulty.name}`,
+        body: `${difficulty.subtitle} · 军功倍率 ×${difficulty.scoreScale}。本波 ${profile.enemyCount} 敌，高阶怪约 ${Math.round(profile.advancedChance * 100)}%。`
+      },
+      wave: { title: `第 ${state.wave} / ${MAX_WAVES} 波`, body: `当前为第 ${profile.stage} 阶段${profile.isBossWave ? ' Boss 波' : ''}；每 10 波敌潮会发生一次跃升。` },
+      kills: { title: `本局歼敌 ${state.kills}`, body: '成功击败才计入歼敌；抵达城墙并自爆的敌人不会计入。' },
+      score: { title: `当前军功 ${state.score.toLocaleString('zh-CN')}`, body: '击杀、波次与难度会影响军功；失败结算还会加入守完波次和有效交战时长。' },
+      wall: { title: `城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax} · 护盾 ${Math.ceil(state.shield)} / ${shieldCapacity()}`, body: `敌人伤害先经过城防减伤 ${wallDefense()}%，再优先消耗护盾；护盾耗尽后才扣除耐久。` },
+      pressure: {
+        title: `本波消除 ${state.waveMatches} / ${profile.requiredGroups} 组`,
+        body: state.waveMatches >= profile.requiredGroups ? '本波建议目标已完成；继续消除仍会获得资源和补强。' : `还差 ${profile.requiredGroups - state.waveMatches} 组达到建议节奏；这是引导目标，不会扣除已有收益。`
+      },
+      combo: { title: `当前连锁 ×${state.combo}`, body: state.combo > 1 ? '连续掉落形成的新消除会提高奥能、耐久/护盾与军功收益。' : '一次交换后若自动形成连续消除，连锁倍率会逐段提高。' },
+      ember: { title: `余烬储备 ${state.emberCharges} / ${EMBER_CHARGE_CAP}`, body: '每枚红曜石提供 1 次余烬齐射；下一轮开火消耗 1 次，使整轮伤害提高 25%。' },
+      mana: { title: `奥能 ${state.mana} / 18`, body: state.mana >= 18 ? '奥术齐射已经就绪：点击技能或按 Q，对所有已进场敌人造成伤害。' : `还需 ${18 - state.mana} 点即可发动奥术齐射；蓝晶消除会积蓄奥能。` },
+      shield: { title: `护盾 ${Math.ceil(state.shield)} / ${shieldCapacity()}`, body: `绿晶先补足缺失耐久，剩余点数转为护盾；护盾上限为耐久上限的 50%。受到伤害时先扣护盾，再扣城墙耐久。` },
+      forge: { title: `可用补强 ${state.forge}`, body: `当前目标：${upgradeLabel} LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}，需要 ${state.forgeTarget} 点。切换目标不会损失进度。` },
+      waveState: { title: remainingEnemies ? `本波剩余 ${remainingEnemies} 敌` : '本波区域肃清', body: `总计 ${state.waveTotal} 敌，每批最多 ${profile.batchSize} 个；场外敌人进场前无法锁定。` },
+      allyAttack: { title: `我方攻击 ${totalPower()}`, body: '主炮弹以该数值为基础，再结算敌方防御；余烬可以令整轮伤害提高 25%。' },
+      allyDefense: { title: `城防减伤 ${wallDefense()}% · 护盾 ${Math.ceil(state.shield)}`, body: `敌人伤害先减免 ${wallDefense()}%，再由护盾吸收；每次升级防御还会使耐久上限 +90，并同步修复最多 90 点。` },
+      allySpeed: { title: `有效射速 ${attackRate()} / 秒`, body: `当前为${volleyLabel()}；攻速升级会缩短间隔，并逐步把单发变为最多四枚齐射。` },
+      targetDamage: {
+        title: enemy ? `目标伤害 ${enemy.damage}` : '目标伤害 —',
+        body: enemy ? (() => {
+          const damage = Math.max(1, Math.round(enemy.damage * (1 - wallDefense() / 100)));
+          const absorbed = Math.min(state.shield, damage);
+          return `抵达终点后结算 ${damage} 点伤害；当前护盾预计吸收 ${Math.round(absorbed)}，耐久损失 ${Math.round(damage - absorbed)}。`;
+        })() : '尚无已进场且可锁定的敌人。'
+      },
+      targetDefense: {
+        title: enemy ? `目标防御 ${effectiveDefense(enemy)}` : '目标防御 —',
+        body: enemy ? `当前约抵消 ${Math.round((1 - 100 / (100 + effectiveDefense(enemy) * 2)) * 100)}% 的弩炮伤害；破甲会暂时降低防御。` : '尚无已进场且可锁定的敌人。'
+      },
+      targetHealth: { title: enemy ? `目标生命 ${Math.max(0, Math.ceil(enemy.hp))} / ${enemy.maxHp}` : '目标生命 —', body: enemy ? '生命归零即被歼灭；若先抵达终点则自爆并从战场移除。' : '尚无已进场且可锁定的敌人。' },
+      arcaneVolley: { title: state.mana >= 18 ? '奥术齐射 · 就绪' : `奥术齐射 · ${state.mana} / 18 奥能`, body: `消耗 18 奥能，对所有已进场敌人造成约 ${Math.round(42 + totalPower() * .65)} 点基础伤害；场外敌人不受影响。` },
+      nextWave: { title: state.intermissionUntil ? `下一波还有 ${Math.max(0, Math.ceil((state.intermissionUntil - performance.now()) / 1000))} 秒` : '下一批交战中', body: '清空当前波后进入短暂整备，再自动开始下一波并保存进度。' },
+      forgeProgress: { title: `${upgradeLabel}补强 ${state.forge} / ${state.forgeTarget}`, body: `升级目标为 LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}。每个消除组 +1，四连与五连、铸币组会获得额外补强。` },
+      weaponLoadout: { title: `${equipmentName('weapon')} · LV.${state.equipment.weapon}`, body: `当前攻击 ${totalPower()}；升级后提高每枚弩炮的基础伤害。` },
+      armorLoadout: { title: `${equipmentName('armor')} · LV.${state.equipment.armor}`, body: `当前减伤 ${wallDefense()}%，城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax}；每升一级使耐久上限 +90，并同步修复最多 90 点。` },
+      charmLoadout: { title: `${equipmentName('charm')} · LV.${state.equipment.charm}`, body: `当前 ${attackRate()} 次/秒、${volleyLabel()}；副弹造成主弹 45% 的基础伤害。` }
+    };
+
+    if (key === 'upgradeStrategy') {
+      const mode = target.dataset.upgrade;
+      const slot = mode === 'auto' ? currentUpgradeSlot('auto') : mode;
+      const label = upgradeSlotLabel(slot);
+      const cost = forgeCostFor(slot);
+      return mode === 'auto'
+        ? { title: `自动 · 本次${label}`, body: `本次会把 ${cost} 补强用于${label} LV.${state.equipment[slot]}→${state.equipment[slot] + 1}；完成后自动重新选择最低等级项目${slot === 'armor' ? '。城防升级还会使耐久上限 +90' : ''}。` }
+        : { title: `${label}优先`, body: `切换后持续补强${label}；下一级需要 ${cost} 点。当前 ${state.forge} 点会完整保留${slot === 'armor' ? '；升级时耐久上限 +90' : ''}。` };
+    }
+    return models[key] || { title: '战场提示', body: '移动鼠标查看这个模块的规则与当前状态。' };
+  }
+
+  function renderContextTooltipContent() {
+    if (!contextTooltipTarget?.isConnected) return;
+    const model = contextTooltipModel(contextTooltipTarget);
+    els.contextTooltipTitle.textContent = model.title;
+    els.contextTooltipBody.textContent = model.body;
+  }
+
+  function positionContextTooltip() {
+    if (!contextTooltipTarget?.isConnected || !els.contextTooltip.classList.contains('is-visible')) return;
+    const margin = 10;
+    const gap = 10;
+    const targetRect = contextTooltipTarget.getBoundingClientRect();
+    const tooltipRect = els.contextTooltip.getBoundingClientRect();
+    const placeAbove = targetRect.top >= tooltipRect.height + gap + margin;
+    const placement = placeAbove ? 'top' : 'bottom';
+    let left = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+    left = Math.max(margin, Math.min(window.innerWidth - tooltipRect.width - margin, left));
+    let top = placeAbove ? targetRect.top - tooltipRect.height - gap : targetRect.bottom + gap;
+    top = Math.max(margin, Math.min(window.innerHeight - tooltipRect.height - margin, top));
+    const arrowX = Math.max(13, Math.min(tooltipRect.width - 23, targetRect.left + targetRect.width / 2 - left - 5));
+    els.contextTooltip.dataset.placement = placement;
+    els.contextTooltip.style.left = `${Math.round(left)}px`;
+    els.contextTooltip.style.top = `${Math.round(top)}px`;
+    els.contextTooltip.style.setProperty('--tip-arrow-x', `${Math.round(arrowX)}px`);
+  }
+
+  function showContextTooltip(target) {
+    if (!target?.dataset.tooltipKey) return;
+    if (contextTooltipTarget && contextTooltipTarget !== target && contextTooltipTarget.getAttribute('aria-describedby') === 'contextTooltip') {
+      contextTooltipTarget.removeAttribute('aria-describedby');
+    }
+    contextTooltipTarget = target;
+    contextTooltipTarget.setAttribute('aria-describedby', 'contextTooltip');
+    renderContextTooltipContent();
+    els.contextTooltip.classList.add('is-visible');
+    els.contextTooltip.setAttribute('aria-hidden', 'false');
+    positionContextTooltip();
+  }
+
+  function refreshContextTooltip() {
+    if (!contextTooltipTarget || !els.contextTooltip.classList.contains('is-visible')) return;
+    renderContextTooltipContent();
+  }
+
+  function hideContextTooltip() {
+    if (contextTooltipTarget?.getAttribute('aria-describedby') === 'contextTooltip') contextTooltipTarget.removeAttribute('aria-describedby');
+    contextTooltipTarget = null;
+    els.contextTooltip.classList.remove('is-visible');
+    els.contextTooltip.setAttribute('aria-hidden', 'true');
+  }
 
   function armGameTask(task) {
     task.startedAt = performance.now();
@@ -789,6 +928,7 @@
       wave: state.wave,
       emberCharges: state.emberCharges,
       mana: state.mana,
+      shield: state.shield,
       repaired: state.repaired,
       forge: state.forge,
       forgeTarget: state.forgeTarget,
@@ -963,6 +1103,7 @@
     state.wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
     state.emberCharges = Math.floor(safeNumber(save.emberCharges, 0, 0, EMBER_CHARGE_CAP));
     state.mana = Math.floor(safeNumber(save.mana, 0, 0, 99));
+    state.shield = 0;
     state.repaired = Math.floor(safeNumber(save.repaired, 0, 0));
     state.forge = Math.floor(safeNumber(save.forge, 0, 0, 1000000));
     state.forgeTarget = FORGE_START;
@@ -976,6 +1117,7 @@
     syncForgeTarget();
     state.wallMax = Math.floor(safeNumber(save.wallMax, 1120, 1, 100000000));
     state.wall = safeNumber(save.wall, state.wallMax, 1, state.wallMax);
+    state.shield = safeNumber(save.shield, 0, 0, shieldCapacity());
     state.combo = Math.floor(safeNumber(save.combo, 1, 1, 999));
     state.enemyId = Math.floor(safeNumber(save.enemyId, 0, 0, 1000000));
     state.waveProfile = getWaveProfile(state.wave, state.difficulty);
@@ -1496,12 +1638,7 @@
       showCombatToast(accepted ? `奥能 +${accepted}` : '奥能已满', 'mana', 39, 24);
     }
     if (counts.moss) {
-      const repair = Math.round(counts.moss * 14 * multiplier);
-      const accepted = Math.max(0, Math.min(repair, state.wallMax - state.wall));
-      state.repaired += accepted;
-      state.wall += accepted;
-      pulseResource('moss', accepted ? `+${accepted}` : '已满');
-      showCombatToast(accepted ? `城墙 +${accepted}` : '城墙已满', 'repair', 20, 53);
+      applyMossSupport(counts.moss * 14 * multiplier);
     }
     const reinforcement = reinforcementReward(matchGroups);
     state.forge += reinforcement.total;
@@ -1513,7 +1650,7 @@
       addLog(`补强 +${reinforcement.total}（基础 ${reinforcement.base}，${bonuses}）`);
     }
     checkForge();
-    if (chain > 1) addLog(`${chain} 连锁！奥能、修复与军功收益提升 ${Math.round((multiplier - 1) * 100)}%`);
+    if (chain > 1) addLog(`${chain} 连锁！奥能、耐久/护盾与军功收益提升 ${Math.round((multiplier - 1) * 100)}%`);
     updateUI();
   }
 
@@ -1525,12 +1662,22 @@
       state.forge -= cost;
       state.equipment[slot] += 1;
       if (state.upgradeMode === 'auto') state.autoUpgradeIndex += 1;
+      let upgradeDetail = '';
       if (slot === 'armor') {
+        const wallBefore = state.wall;
         state.wallMax += 90;
         state.wall = Math.min(state.wallMax, state.wall + 90);
+        const restored = Math.max(0, Math.round(state.wall - wallBefore));
+        upgradeDetail = `；耐久上限 +90${restored ? `，同步修复 ${restored}` : ''}`;
+        const wallStatus = $('.wall-status');
+        wallStatus.classList.remove('is-upgraded');
+        void wallStatus.offsetWidth;
+        wallStatus.classList.add('is-upgraded');
+        scheduleGameTask(() => wallStatus.classList.remove('is-upgraded'), 950);
+        showCombatToast(`耐久上限 +90${restored ? ` · 修复 +${restored}` : ''}`, 'repair', 20, 48);
       }
-      addLog(`消耗 ${cost} 点补强，${upgradeSlotLabel(slot)}从 LV.${state.equipment[slot] - 1} 升至 LV.${state.equipment[slot]}${state.upgradeMode === 'auto' ? '；自动策略将重新选择目标' : ''}`);
-      showCombatToast('装备升级！', 'forge', 53, 48);
+      addLog(`消耗 ${cost} 点补强，${upgradeSlotLabel(slot)}从 LV.${state.equipment[slot] - 1} 升至 LV.${state.equipment[slot]}${upgradeDetail}${state.upgradeMode === 'auto' ? '；自动策略将重新选择目标' : ''}`);
+      if (slot !== 'armor') showCombatToast('装备升级！', 'forge', 53, 48);
       scheduleGameTask(() => pulseResource('coin', `-${cost}`, 'spend'), 180);
       celebrateEquipmentUpgrade(slot, cost);
     }
@@ -1550,7 +1697,7 @@
     updateFieldHud();
 
     $('#upgradeEquipmentName').textContent = equipmentName(slot);
-    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}`;
+    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}${slot === 'armor' ? ' · 耐久上限 +90' : ''}`;
     banner.classList.remove('is-visible');
     card.classList.remove('is-upgraded');
     void banner.offsetWidth;
@@ -1633,6 +1780,28 @@
     return wallDefenseForLevel(state.equipment.armor);
   }
 
+  function shieldCapacity(wallMax = state.wallMax) {
+    return Math.max(1, Math.round(wallMax * SHIELD_MAX_RATIO));
+  }
+
+  function applyMossSupport(amount, announce = true) {
+    const offered = Math.max(0, Math.round(Number(amount) || 0));
+    const restored = Math.min(offered, Math.max(0, state.wallMax - state.wall));
+    state.wall += restored;
+    state.repaired += restored;
+    const shieldOffered = offered - restored;
+    const shieldGained = Math.min(shieldOffered, Math.max(0, shieldCapacity() - state.shield));
+    state.shield += shieldGained;
+    const accepted = restored + shieldGained;
+    if (announce) {
+      const delta = [restored ? `耐久 +${restored}` : '', shieldGained ? `护盾 +${shieldGained}` : ''].filter(Boolean).join(' · ');
+      pulseResource('moss', accepted ? `+${accepted}` : '已满');
+      showCombatToast(delta || '耐久与护盾已满', 'shield', 20, 53);
+      addLog(delta ? `绿晶生效：${delta}` : '绿晶能量溢散：耐久与护盾均已达到上限');
+    }
+    return { offered, restored, shieldGained, accepted, shield: state.shield, shieldMax: shieldCapacity(), wall: state.wall };
+  }
+
   function breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
     const stats = BASE_ENEMY_STATS[type] || BASE_ENEMY_STATS.raider;
     const profile = getWaveProfile(wave, difficulty);
@@ -1685,7 +1854,7 @@
   function updateSoundButton() {
     els.soundButton.classList.toggle('is-muted', sound.muted);
     els.soundButton.setAttribute('aria-label', sound.muted ? '开启音效' : '关闭音效');
-    els.soundButton.setAttribute('title', sound.muted ? '开启音效' : '关闭音效');
+    els.soundButton.removeAttribute('title');
     els.soundButton.querySelector('span').textContent = sound.muted ? '×' : '♪';
   }
 
@@ -1726,7 +1895,7 @@
     $('#scoreValue').textContent = String(state.score).padStart(5, '0');
     $('#emberValue').textContent = state.emberCharges;
     $('#manaValue').textContent = state.mana;
-    $('#repairValue').textContent = state.repaired;
+    $('#shieldValue').textContent = Math.ceil(state.shield);
     $('#forgeValue').textContent = state.forge;
     $('#pressureTierValue').textContent = `第 ${profile.stage} 阶段${profile.isBossWave ? ' · BOSS' : ''}`;
     $('#waveMatchValue').textContent = state.waveMatches;
@@ -1737,7 +1906,9 @@
     $('.pressure-status').classList.toggle('is-met', state.waveMatches >= profile.requiredGroups);
     $('#wallValue').textContent = Math.max(0, Math.ceil(state.wall));
     $('#wallMaxValue').textContent = state.wallMax;
+    $('#shieldRailValue').textContent = Math.ceil(state.shield);
     $('#wallMeter').style.width = `${Math.max(0, state.wall / state.wallMax) * 100}%`;
+    $('#shieldMeter').style.width = `${Math.max(0, state.shield / shieldCapacity()) * 100}%`;
     updateUpgradeTargetUI();
     $('#forgeMeter').style.width = `${Math.min(100, state.forge / state.forgeTarget * 100)}%`;
     $('#forgeProgressText').textContent = `${state.forge} / ${state.forgeTarget}`;
@@ -1766,6 +1937,7 @@
     }
     updateTargetDossier();
     renderCombatBuff();
+    refreshContextTooltip();
   }
 
   function updateTargetDossier() {
@@ -2095,16 +2267,20 @@
     scheduleGameTask(() => enemy.el.remove(), 440);
     const defense = wallDefense();
     const damage = Math.max(1, Math.round(enemy.damage * (1 - defense / 100)));
-    state.wall -= damage;
+    const shieldAbsorbed = Math.min(state.shield, damage);
+    state.shield -= shieldAbsorbed;
+    const wallDamage = damage - shieldAbsorbed;
+    state.wall -= wallDamage;
     createImpactEffect(Math.max(13, enemy.x), enemy.y, 'self-destruct');
     sound.play('wall', .52, enemy.type === 'boss' ? .62 : .8);
     sound.tone(enemy.type === 'boss' ? 46 : 64, .42, 'sawtooth', .052);
     sound.tone(enemy.type === 'boss' ? 78 : 106, .26, 'square', .034, .06);
-    els.fortress.classList.remove('is-hit', 'is-breached');
+    els.fortress.classList.remove('is-hit', 'is-breached', 'is-shielded');
     void els.fortress.offsetWidth;
-    els.fortress.classList.add('is-breached');
-    showCombatToast(`自爆 -${damage}`, 'damage', 18, 48);
-    addLog(`${enemy.label}抵达终点后自爆：基础伤害 ${enemy.damage}，城防减免 ${defense}% 后损失 ${damage} 耐久`);
+    els.fortress.classList.add(wallDamage ? 'is-breached' : 'is-shielded');
+    if (shieldAbsorbed) showCombatToast(`护盾 -${Math.round(shieldAbsorbed)}`, 'shield', 22, 43);
+    if (wallDamage) showCombatToast(`耐久 -${Math.round(wallDamage)}`, 'damage', 18, 53);
+    addLog(`${enemy.label}抵达终点后自爆：减伤后 ${damage} 点，护盾吸收 ${Math.round(shieldAbsorbed)}，耐久损失 ${Math.round(wallDamage)}`);
     updateUI();
     if (state.wall <= 0) endGame();
   }
@@ -2257,7 +2433,7 @@
     state.selected = null; state.locked = false; state.started = true; state.paused = false; state.gameOver = false;
     state.resolution = null; state.pausedAt = 0; state.activePlayMs = 0; state.settlementRecorded = false; state.rulesWasPaused = false;
     state.difficulty = state.selectedDifficulty;
-    state.score = 0; state.kills = 0; state.wave = 1; state.emberCharges = 0; state.mana = 0; state.repaired = 0;
+    state.score = 0; state.kills = 0; state.wave = 1; state.emberCharges = 0; state.mana = 0; state.shield = 0; state.repaired = 0;
     state.forge = 0; state.forgeTarget = FORGE_START; state.equipment = { weapon: 1, armor: 1, charm: 1 };
     state.upgradeMode = 'auto'; state.autoUpgradeIndex = 0; state.combatBuff = null; state.combatBuffQueue = [];
     state.wallMax = 1120; state.wall = 1120; state.combo = 1; state.enemyId = 0;
@@ -2409,7 +2585,7 @@
     const active = Boolean(document.fullscreenElement);
     els.fullscreenButton.querySelector('span').textContent = active ? '⤡' : '⤢';
     els.fullscreenButton.setAttribute('aria-label', active ? '退出全屏' : '进入全屏');
-    els.fullscreenButton.setAttribute('title', active ? '退出全屏' : '进入全屏');
+    els.fullscreenButton.removeAttribute('title');
     els.fullscreenButton.classList.toggle('is-active', active);
     scheduleGameFit();
   }
@@ -2445,6 +2621,25 @@
   els.soundButton.addEventListener('click', () => sound.toggle());
   els.fullscreenButton.addEventListener('click', toggleFullscreen);
   els.volleyButton.addEventListener('click', castVolley);
+  document.addEventListener('pointerover', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const target = event.target.closest('[data-tooltip-key]');
+    if (!target || (event.relatedTarget instanceof Node && target.contains(event.relatedTarget))) return;
+    showContextTooltip(target);
+  });
+  document.addEventListener('pointerout', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const target = event.target.closest('[data-tooltip-key]');
+    if (!target || target !== contextTooltipTarget || (event.relatedTarget instanceof Node && target.contains(event.relatedTarget))) return;
+    hideContextTooltip();
+  });
+  document.addEventListener('focusin', (event) => {
+    if (event.target instanceof Element && event.target.matches('[data-tooltip-key]')) showContextTooltip(event.target);
+  });
+  document.addEventListener('focusout', (event) => {
+    if (event.target === contextTooltipTarget && !(event.relatedTarget instanceof Node && event.target.contains(event.relatedTarget))) hideContextTooltip();
+  });
+  document.addEventListener('click', hideContextTooltip, true);
   document.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'q') castVolley();
     if (event.key === 'Escape' && els.rulesModal.classList.contains('is-open')) closeRules();
@@ -2457,6 +2652,8 @@
   });
   window.addEventListener('pagehide', () => saveProgress('leave'));
   window.addEventListener('resize', scheduleGameFit, { passive: true });
+  window.addEventListener('resize', positionContextTooltip, { passive: true });
+  window.addEventListener('scroll', positionContextTooltip, { passive: true, capture: true });
   window.addEventListener('orientationchange', scheduleGameFit, { passive: true });
   window.addEventListener('load', scheduleGameFit, { once: true });
   if (document.fonts?.ready) document.fonts.ready.then(scheduleGameFit);
@@ -2578,9 +2775,12 @@
         enemy.targetableAt = performance.now();
         positionEnemy(enemy);
         const wallBefore = state.wall;
+        const shieldBefore = state.shield;
         const baseDamage = enemy.damage;
         const defense = wallDefense();
         const expectedDamage = Math.max(1, Math.round(baseDamage * (1 - defense / 100)));
+        const expectedShieldAbsorb = Math.min(shieldBefore, expectedDamage);
+        const expectedWallDamage = expectedDamage - expectedShieldAbsorb;
         enemyBreaches(enemy);
         return {
           id: enemy.id,
@@ -2588,12 +2788,28 @@
           baseDamage,
           defense,
           expectedDamage,
-          actualDamage: wallBefore - state.wall,
+          expectedShieldAbsorb,
+          expectedWallDamage,
+          actualShieldAbsorb: shieldBefore - state.shield,
+          actualWallDamage: wallBefore - state.wall,
           wallBefore,
           wallAfter: state.wall,
+          shieldBefore,
+          shieldAfter: state.shield,
           removedFromBattle: !state.enemies.includes(enemy),
           selfDestructing: enemy.el.classList.contains('is-self-destructing')
         };
+      },
+      setDefenseState(wall = state.wallMax, shield = 0) {
+        state.wall = safeNumber(wall, state.wallMax, 0, state.wallMax);
+        state.shield = safeNumber(shield, 0, 0, shieldCapacity());
+        updateUI();
+        return { wall: state.wall, wallMax: state.wallMax, shield: state.shield, shieldMax: shieldCapacity() };
+      },
+      grantMossSupport(amount = 42) {
+        const result = applyMossSupport(amount);
+        updateUI();
+        return result;
       },
       enterAllEnemies() {
         const now = performance.now();
@@ -2656,6 +2872,8 @@
           kills: state.kills,
           wall: state.wall,
           wallMax: state.wallMax,
+          shield: state.shield,
+          shieldMax: shieldCapacity(),
           waveMatches: state.waveMatches,
           totalMatches: state.totalMatches,
           waveProfile: state.waveProfile,
