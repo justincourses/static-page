@@ -121,6 +121,21 @@
             <div class="battle-sun"></div>
             <div class="lane-lines"><i></i><i></i><i></i></div>
 
+            <aside class="target-dossier is-empty" id="targetDossier" aria-live="polite">
+              <div class="target-dossier-heading">
+                <span>当前威胁 / TARGET</span>
+                <i></i>
+              </div>
+              <strong id="targetName">前线侦察中</strong>
+              <small id="targetRole">尚未发现敌军</small>
+              <div class="target-stats">
+                <div><span>攻击</span><b id="targetAttack">—</b></div>
+                <div><span>防御</span><b id="targetDefense">—</b></div>
+                <div><span>生命</span><b id="targetHealth">—</b></div>
+              </div>
+              <div class="target-health-track"><span id="targetHealthMeter"></span></div>
+            </aside>
+
             <div class="fortress" id="fortress">
               <div class="flag"><span></span></div>
               <div class="turret"><i></i></div>
@@ -155,6 +170,11 @@
           </div>
 
           <section class="arsenal" aria-labelledby="arsenalTitle">
+            <div class="equipment-upgrade-banner" id="equipmentUpgradeBanner" aria-live="polite">
+              <span>军械升级 / AUTO-EQUIP</span>
+              <strong id="upgradeEquipmentName">余烬连弩</strong>
+              <small id="upgradeEquipmentLevel">LV.2 · 已自动装备</small>
+            </div>
             <div class="arsenal-heading">
               <div>
                 <span class="eyebrow">自动军械库</span>

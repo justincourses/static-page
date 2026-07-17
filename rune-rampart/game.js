@@ -11,6 +11,12 @@
     armor: ['橡木城栅', '铆铁壁垒', '符文城墙', '永恒堡垒', '不落王垒'],
     charm: ['斥候号角', '疾风徽记', '时序沙漏', '龙心军旗', '苍穹战鼓']
   };
+  const ENEMY_NAMES = {
+    raider: ['裂齿·格鲁', '灰旗·乌桑', '断刃·柯勒', '荒牙·莫克', '红疤·伊戈'],
+    swift: ['影足·希芙', '夜鸦·涅拉', '风刃·卡西', '薄雾·洛萨', '疾影·薇恩'],
+    brute: ['铁颚·巴图', '碎墙·葛恩', '铜背·沃尔', '独眼·赫山', '重槌·鲁格'],
+    boss: ['焚城者·戈摩', '不屈巨兽·塔恩', '王旗终结者·穆拉']
+  };
 
   const $ = (selector) => document.querySelector(selector);
   const els = {
@@ -29,6 +35,8 @@
     soundButton: $('#soundButton'),
     boardEffects: $('#boardEffects'),
     cascadeCallout: $('#cascadeCallout'),
+    targetDossier: $('#targetDossier'),
+    upgradeBanner: $('#equipmentUpgradeBanner'),
     volleyButton: $('#volleyButton')
   };
 
@@ -390,16 +398,53 @@
         state.wallMax += 120;
         state.wall = Math.min(state.wallMax, state.wall + 120);
       }
-      const card = $(`#${slot}Card`);
-      card.classList.remove('is-upgraded');
-      void card.offsetWidth;
-      card.classList.add('is-upgraded');
       addLog(`${equipmentName(slot)}锻造完成，已自动装备`);
       showCombatToast('装备升级！', 'forge', 53, 48);
-      sound.play('forge', .35, 1.02);
-      sound.tone(392, .22, 'triangle', .04, .04);
-      sound.tone(587, .28, 'sine', .035, .16);
+      celebrateEquipmentUpgrade(slot);
     }
+  }
+
+  function celebrateEquipmentUpgrade(slot) {
+    const level = state.equipment[slot];
+    const card = $(`#${slot}Card`);
+    const banner = els.upgradeBanner;
+
+    $(`#${slot}Level`).textContent = level;
+    $(`#${slot}Name`).textContent = equipmentName(slot);
+    if (slot === 'weapon') $('#weaponStat').textContent = `伤害 +${level * 7}`;
+    if (slot === 'armor') $('#armorStat').textContent = `耐久 +${level * 120}`;
+    if (slot === 'charm') $('#charmStat').textContent = `攻速 +${level * 6}%`;
+
+    $('#upgradeEquipmentName').textContent = equipmentName(slot);
+    $('#upgradeEquipmentLevel').textContent = `LV.${level} · 已自动装备`;
+    banner.classList.remove('is-visible');
+    card.classList.remove('is-upgraded');
+    void banner.offsetWidth;
+    void card.offsetWidth;
+    banner.classList.add('is-visible');
+    card.classList.add('is-upgraded');
+
+    for (let index = 0; index < 14; index += 1) {
+      const spark = document.createElement('i');
+      const angle = Math.PI * 2 * index / 14 + Math.random() * .25;
+      const distance = 34 + Math.random() * 48;
+      spark.className = 'equipment-spark';
+      spark.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+      spark.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
+      spark.style.animationDelay = `${index * 18}ms`;
+      card.appendChild(spark);
+      setTimeout(() => spark.remove(), 1050);
+    }
+
+    sound.play('forge', .48, .96);
+    sound.tone(294, .22, 'triangle', .045, .02);
+    sound.tone(392, .26, 'triangle', .045, .13);
+    sound.tone(587, .34, 'sine', .04, .26);
+    sound.tone(784, .42, 'sine', .03, .41);
+    setTimeout(() => {
+      banner.classList.remove('is-visible');
+      card.classList.remove('is-upgraded');
+    }, 1950);
   }
 
   function equipmentName(slot) {
@@ -461,6 +506,30 @@
     } else {
       $('#nextWaveValue').textContent = '交战中';
     }
+    updateTargetDossier();
+  }
+
+  function updateTargetDossier() {
+    if (!state.enemies.length) {
+      els.targetDossier.classList.add('is-empty');
+      els.targetDossier.classList.remove('is-alert');
+      $('#targetName').textContent = '前线侦察中';
+      $('#targetRole').textContent = '尚未发现敌军';
+      $('#targetAttack').textContent = '—';
+      $('#targetDefense').textContent = '—';
+      $('#targetHealth').textContent = '—';
+      $('#targetHealthMeter').style.width = '0%';
+      return;
+    }
+    const target = state.enemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest);
+    els.targetDossier.classList.remove('is-empty');
+    els.targetDossier.classList.toggle('is-alert', target.type === 'boss');
+    $('#targetName').textContent = target.name;
+    $('#targetRole').textContent = target.role;
+    $('#targetAttack').textContent = target.damage;
+    $('#targetDefense').textContent = target.defense;
+    $('#targetHealth').textContent = Math.max(0, Math.ceil(target.hp));
+    $('#targetHealthMeter').style.width = `${Math.max(0, target.hp / target.maxHp) * 100}%`;
   }
 
   function startWave(wave) {
@@ -488,19 +557,23 @@
     const roll = Math.random();
     const type = isBoss ? 'boss' : roll < Math.min(.16 + state.wave * .012, .34) ? 'brute' : roll < .42 ? 'swift' : 'raider';
     const stats = {
-      raider: { hp: 72 + state.wave * 29, speed: 3.1 + state.wave * .035, damage: 70 + state.wave * 8, label: '荒原劫掠者' },
-      swift: { hp: 49 + state.wave * 21, speed: 5.2 + state.wave * .04, damage: 48 + state.wave * 6, label: '影袭斥候' },
-      brute: { hp: 148 + state.wave * 47, speed: 2.05 + state.wave * .025, damage: 118 + state.wave * 11, label: '披甲蛮兵' },
-      boss: { hp: 760 + state.wave * 110, speed: 1.35 + state.wave * .015, damage: 270 + state.wave * 15, label: '攻城巨兽' }
+      raider: { hp: 72 + state.wave * 29, speed: 3.1 + state.wave * .035, damage: 70 + state.wave * 8, defense: 4 + state.wave, role: '荒原劫掠者 · 均衡型' },
+      swift: { hp: 49 + state.wave * 21, speed: 5.2 + state.wave * .04, damage: 48 + state.wave * 6, defense: 1 + Math.floor(state.wave * .6), role: '影袭斥候 · 高速型' },
+      brute: { hp: 148 + state.wave * 47, speed: 2.05 + state.wave * .025, damage: 118 + state.wave * 11, defense: 12 + Math.floor(state.wave * 1.5), role: '披甲蛮兵 · 重甲型' },
+      boss: { hp: 760 + state.wave * 110, speed: 1.35 + state.wave * .015, damage: 270 + state.wave * 15, defense: 24 + Math.floor(state.wave * 2.2), role: '攻城巨兽 · 首领' }
     }[type];
+    const enemyId = ++state.enemyId;
+    const names = ENEMY_NAMES[type];
+    const name = names[(enemyId + state.wave - 2) % names.length];
     const enemy = {
-      id: ++state.enemyId, type, hp: stats.hp, maxHp: stats.hp, speed: stats.speed,
-      damage: stats.damage, label: stats.label, x: 105 + Math.random() * 4, y: 60 + Math.random() * 23
+      id: enemyId, type, name, role: stats.role, hp: stats.hp, maxHp: stats.hp, speed: stats.speed,
+      damage: Math.round(stats.damage), defense: Math.round(stats.defense), label: name,
+      x: 105 + Math.random() * 4, y: 60 + Math.random() * 23
     };
     const el = document.createElement('div');
     el.className = `enemy ${type}`;
     el.dataset.id = enemy.id;
-    el.innerHTML = `<div class="enemy-hp"><span></span></div><div class="enemy-body"><i class="horns"></i></div><span class="enemy-label">${enemy.label}</span>`;
+    el.innerHTML = `<div class="enemy-hp"><span></span></div><div class="enemy-body"><i class="horns"></i></div><span class="enemy-stats-mini"><b>攻 ${enemy.damage}</b><b>防 ${enemy.defense}</b></span><span class="enemy-label">${enemy.name}</span>`;
     enemy.el = el;
     els.enemiesLayer.appendChild(el);
     state.enemies.push(enemy);
@@ -551,13 +624,14 @@
   }
 
   function damageEnemy(enemy, damage, crit = false) {
-    enemy.hp -= damage;
+    const mitigatedDamage = Math.max(1, Math.round(damage * (100 / (100 + enemy.defense * 2))));
+    enemy.hp -= mitigatedDamage;
     sound.play('hit', crit ? .13 : .065, crit ? 1.15 : .95 + Math.random() * .12);
     enemy.el.classList.remove('is-hit');
     void enemy.el.offsetWidth;
     enemy.el.classList.add('is-hit');
     positionEnemy(enemy);
-    showCombatToast(`${crit ? '暴击 ' : ''}-${damage}`, 'damage', enemy.x, enemy.y);
+    showCombatToast(`${crit ? '暴击 ' : ''}-${mitigatedDamage}`, 'damage', enemy.x, enemy.y);
     if (enemy.hp <= 0) killEnemy(enemy);
   }
 
@@ -738,6 +812,16 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && state.started && !state.gameOver) togglePause(true);
   });
+
+  if (new URLSearchParams(window.location.search).has('testMode')) {
+    window.__runeRampartTest = {
+      grantForge(amount) {
+        state.forge += Number(amount) || state.forgeTarget;
+        checkForge();
+        updateUI();
+      }
+    };
+  }
 
   buildBoard();
   renderBoard(new Set(), -1, 'initial');

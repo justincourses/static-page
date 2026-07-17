@@ -60,7 +60,7 @@ let activeBrowser;
     errors.push(`request: ${request.url()} ${failure ? failure.errorText : 'failed'}`);
   });
 
-  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
   if (await page.title() !== '符文壁垒 · Rune Rampart') throw new Error('Unexpected page title');
   if (!await page.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Briefing modal is not open');
   await page.locator('#startButton').click();
@@ -73,6 +73,17 @@ let activeBrowser;
   if (!await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound mute toggle failed');
   await page.locator('#soundButton').click();
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
+
+  await page.evaluate(() => window.__runeRampartTest.grantForge(18));
+  await page.locator('.equipment-card.is-upgraded').waitFor({ state: 'visible', timeout: 800 });
+  await page.locator('#equipmentUpgradeBanner.is-visible').waitFor({ state: 'visible', timeout: 800 });
+  const equipmentLevelTotal = await page.locator('#weaponLevel, #armorLevel, #charmLevel').evaluateAll(
+    (nodes) => nodes.reduce((total, node) => total + Number(node.textContent), 0)
+  );
+  if (equipmentLevelTotal !== 4) throw new Error(`Equipment upgrade did not apply: ${equipmentLevelTotal}`);
+  await page.waitForTimeout(180);
+  await page.screenshot({ path: path.join(output, 'equipment-upgrade.png'), fullPage: true });
+  await page.waitForTimeout(1900);
 
   const beforeScore = Number(await page.locator('#scoreValue').innerText());
   const classes = await page.locator('.rune-tile').evaluateAll((nodes) => nodes.map((node) => node.className));
@@ -95,6 +106,11 @@ let activeBrowser;
 
   await page.waitForTimeout(1500);
   if (await page.locator('.enemy').count() < 1) throw new Error('No enemy spawned');
+  if (await page.locator('#targetDossier').evaluate((node) => node.classList.contains('is-empty'))) throw new Error('Target dossier did not acquire an enemy');
+  if (Number(await page.locator('#targetAttack').innerText()) <= 0) throw new Error('Enemy attack is not displayed');
+  if (Number(await page.locator('#targetDefense').innerText()) < 0) throw new Error('Enemy defense is not displayed');
+  if ((await page.locator('.enemy-label').first().innerText()).length < 3) throw new Error('Enemy name is missing');
+  await page.screenshot({ path: path.join(output, 'enemy-dossier.png'), fullPage: false });
   await page.locator('#pauseButton').click();
   if (!await page.locator('#boardLock').evaluate((node) => node.classList.contains('is-visible'))) throw new Error('Pause lock is not visible');
   await page.locator('#pauseButton').click();
