@@ -468,6 +468,7 @@ button:focus-visible {
   position: relative;
   z-index: 1;
 }
+.match-board.is-collapsing { overflow: hidden; }
 
 .rune-tile {
   position: relative;
@@ -517,7 +518,7 @@ button:focus-visible {
   border-radius: 50%;
   animation: burst-ring .46s ease-out forwards;
 }
-.rune-tile.is-dropping { animation: tile-drop .5s cubic-bezier(.16,.86,.28,1.18) both; }
+.rune-tile.is-dropping { z-index: 2; animation: tile-drop .5s cubic-bezier(.16,.86,.28,1.18) both; }
 .rune-tile.invalid { animation: tile-shake .28s ease; }
 .rune-symbol { position: relative; z-index: 1; font-size: clamp(21px, 3vw, 35px); line-height: 1; text-shadow: 0 2px 2px rgba(0,0,0,.6); }
 .rune-tile.ember { background: radial-gradient(circle at 35% 25%, #ee7959, #a63428 68%, #61251f); }
@@ -1079,7 +1080,12 @@ button:focus-visible {
 
 @keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(213,82,55,0); } 100% { box-shadow: 0 0 0 0 rgba(213,82,55,0); } }
 @keyframes tile-in { from { opacity: 0; transform: translateY(-18px) scale(.8); } }
-@keyframes tile-drop { from { opacity: .25; transform: translateY(-35px) scale(.86); filter: brightness(1.45); } 72% { opacity: 1; transform: translateY(3px) scale(1.03); } to { transform: translateY(0) scale(1); } }
+@keyframes tile-drop {
+  0% { opacity: .72; transform: translateY(var(--drop-offset, -35px)) scale(.96); filter: brightness(1.28); }
+  14% { opacity: .88; transform: translateY(calc(var(--drop-offset, -35px) - 7px)) scale(.98); filter: brightness(1.4); }
+  74% { opacity: 1; transform: translateY(3px) scale(1.03); filter: brightness(1.06); }
+  100% { transform: translateY(0) scale(1); filter: brightness(1); }
+}
 @keyframes rune-charge { from { transform: scale(1.02); filter: brightness(1.2); } to { transform: scale(1.13) rotate(2deg); filter: brightness(1.75) saturate(1.25); } }
 @keyframes charge-ring { from { opacity: .2; transform: scale(.85) rotate(0); } to { opacity: .95; transform: scale(1.08) rotate(8deg); } }
 @keyframes rune-burst { 28% { transform: scale(1.28) rotate(-3deg); filter: brightness(2.5) saturate(1.4); } 58% { opacity: 1; transform: scale(.98) rotate(8deg); } to { opacity: 0; transform: scale(.12) rotate(28deg); filter: brightness(3); } }

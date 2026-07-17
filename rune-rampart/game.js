@@ -8,6 +8,8 @@
   const EMBER_CHARGE_CAP = 24;
   const EMBER_DAMAGE_MULTIPLIER = 1.25;
   const SHIELD_MAX_RATIO = .5;
+  const ARMOR_WALL_BONUS = 90;
+  const ARMOR_SHIELD_BONUS = Math.round(ARMOR_WALL_BONUS * SHIELD_MAX_RATIO);
   const FORGE_START = 26;
   const FORGE_LEVEL_STEP = 10;
   const FORGE_LATE_STEP = 2;
@@ -555,7 +557,7 @@
       forge: { title: `可用补强 ${state.forge}`, body: `当前目标：${upgradeLabel} LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}，需要 ${state.forgeTarget} 点。切换目标不会损失进度。` },
       waveState: { title: remainingEnemies ? `本波剩余 ${remainingEnemies} 敌` : '本波区域肃清', body: `总计 ${state.waveTotal} 敌，每批最多 ${profile.batchSize} 个；场外敌人进场前无法锁定。` },
       allyAttack: { title: `我方攻击 ${totalPower()}`, body: '主炮弹以该数值为基础，再结算敌方防御；余烬可以令整轮伤害提高 25%。' },
-      allyDefense: { title: `城防减伤 ${wallDefense()}% · 护盾 ${Math.ceil(state.shield)}`, body: `敌人伤害先减免 ${wallDefense()}%，再由护盾吸收；每次升级防御还会使耐久上限 +90，并同步修复最多 90 点。` },
+      allyDefense: { title: `城防减伤 ${wallDefense()}% · 护盾 ${Math.ceil(state.shield)}`, body: `敌人伤害先减免 ${wallDefense()}%，再由护盾吸收；每次升级防御还会使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}，并同步修复最多 ${ARMOR_WALL_BONUS} 点。` },
       allySpeed: { title: `有效射速 ${attackRate()} / 秒`, body: `当前为${volleyLabel()}；攻速升级会缩短间隔，并逐步把单发变为最多四枚齐射。` },
       targetDamage: {
         title: enemy ? `目标伤害 ${enemy.damage}` : '目标伤害 —',
@@ -574,7 +576,7 @@
       nextWave: { title: state.intermissionUntil ? `下一波还有 ${Math.max(0, Math.ceil((state.intermissionUntil - performance.now()) / 1000))} 秒` : '下一批交战中', body: '清空当前波后进入短暂整备，再自动开始下一波并保存进度。' },
       forgeProgress: { title: `${upgradeLabel}补强 ${state.forge} / ${state.forgeTarget}`, body: `升级目标为 LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}。每个消除组 +1，四连与五连、铸币组会获得额外补强。` },
       weaponLoadout: { title: `${equipmentName('weapon')} · LV.${state.equipment.weapon}`, body: `当前攻击 ${totalPower()}；升级后提高每枚弩炮的基础伤害。` },
-      armorLoadout: { title: `${equipmentName('armor')} · LV.${state.equipment.armor}`, body: `当前减伤 ${wallDefense()}%，城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax}；每升一级使耐久上限 +90，并同步修复最多 90 点。` },
+      armorLoadout: { title: `${equipmentName('armor')} · LV.${state.equipment.armor}`, body: `当前减伤 ${wallDefense()}%，城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax}、护盾上限 ${shieldCapacity()}；每升一级使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}，并同步修复最多 ${ARMOR_WALL_BONUS} 点。` },
       charmLoadout: { title: `${equipmentName('charm')} · LV.${state.equipment.charm}`, body: `当前 ${attackRate()} 次/秒、${volleyLabel()}；副弹造成主弹 45% 的基础伤害。` }
     };
 
@@ -584,8 +586,8 @@
       const label = upgradeSlotLabel(slot);
       const cost = forgeCostFor(slot);
       return mode === 'auto'
-        ? { title: `自动 · 本次${label}`, body: `本次会把 ${cost} 补强用于${label} LV.${state.equipment[slot]}→${state.equipment[slot] + 1}；完成后自动重新选择最低等级项目${slot === 'armor' ? '。城防升级还会使耐久上限 +90' : ''}。` }
-        : { title: `${label}优先`, body: `切换后持续补强${label}；下一级需要 ${cost} 点。当前 ${state.forge} 点会完整保留${slot === 'armor' ? '；升级时耐久上限 +90' : ''}。` };
+        ? { title: `自动 · 本次${label}`, body: `本次会把 ${cost} 补强用于${label} LV.${state.equipment[slot]}→${state.equipment[slot] + 1}；完成后自动重新选择最低等级项目${slot === 'armor' ? `。城防升级还会使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}。` }
+        : { title: `${label}优先`, body: `切换后持续补强${label}；下一级需要 ${cost} 点。当前 ${state.forge} 点会完整保留${slot === 'armor' ? `；升级时耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}。` };
     }
     return models[key] || { title: '战场提示', body: '移动鼠标查看这个模块的规则与当前状态。' };
   }
@@ -1310,12 +1312,15 @@
     if (!hasPossibleMove()) buildBoard();
   }
 
-  function renderBoard(matched = new Set(), invalidIndex = -1, phase = '') {
+  function renderBoard(matched = new Set(), invalidIndex = -1, phase = '', dropPlan = null) {
     const fragment = document.createDocumentFragment();
+    els.board.classList.toggle('is-collapsing', phase === 'dropping');
+    const boardGap = phase === 'dropping' ? Number.parseFloat(getComputedStyle(els.board).rowGap) || 4 : 0;
     state.board.forEach((type, index) => {
       const tile = document.createElement('button');
       const row = Math.floor(index / COLS);
       const col = index % COLS;
+      const dropRows = dropPlan?.get(index) || 0;
       const relicType = state.boardRelics[index];
       const relic = relicType ? RELICS[relicType] : null;
       tile.type = 'button';
@@ -1323,12 +1328,16 @@
       if (state.selected === index) tile.classList.add('selected');
       if (matched.has(index)) tile.classList.add(phase === 'primed' ? 'match-primed' : 'matched');
       if (phase === 'initial') tile.classList.add('is-entering');
-      if (phase === 'dropping') tile.classList.add('is-dropping');
+      if (phase === 'dropping' && dropRows > 0) {
+        tile.classList.add('is-dropping');
+        tile.dataset.dropRows = String(dropRows);
+        tile.style.setProperty('--drop-offset', `calc(-${dropRows * 100}% - ${dropRows * boardGap}px)`);
+      }
       if (index === invalidIndex) tile.classList.add('invalid');
       tile.dataset.index = String(index);
       tile.setAttribute('role', 'gridcell');
       tile.setAttribute('aria-label', `${row + 1} 行 ${col + 1} 列，${TYPE_NAMES[type] || '空位'}${relic ? `，携带${relic.name}彩蛋` : ''}`);
-      tile.style.animationDelay = phase === 'dropping'
+      tile.style.animationDelay = phase === 'dropping' && dropRows > 0
         ? `${(ROWS - row) * 28 + col * 7}ms`
         : phase === 'initial' ? `${(row + col) * 7}ms` : '0ms';
       tile.innerHTML = `<span class="rune-symbol" aria-hidden="true">${SYMBOLS[type] || ''}</span>${relic ? `<span class="rune-relic-mark" title="消除后触发${relic.name}" aria-hidden="true">${relic.icon}</span>` : ''}`;
@@ -1513,12 +1522,13 @@
         state.board[index] = null;
         state.boardRelics[index] = null;
       });
-      collapseBoard();
+      const dropPlan = collapseBoard();
       state.resolution = { kind: 'resolve', phase: 'dropping' };
-      renderBoard(new Set(), -1, 'dropping');
+      renderBoard(new Set(), -1, 'dropping', dropPlan);
       sound.tone(105, .09, 'triangle', .025, .19);
       await wait(560);
       if (sessionId !== state.sessionId) return;
+      els.board.classList.remove('is-collapsing');
       matches = findMatches();
       chain += 1;
     }
@@ -1568,20 +1578,25 @@
   }
 
   function collapseBoard() {
+    const dropPlan = new Map();
     for (let col = 0; col < COLS; col += 1) {
       const remaining = [];
       for (let row = ROWS - 1; row >= 0; row -= 1) {
         const index = indexOf(row, col);
         const value = state.board[index];
-        if (value) remaining.push({ type: value, relic: state.boardRelics[index] });
+        if (value) remaining.push({ type: value, relic: state.boardRelics[index], sourceRow: row });
       }
+      const spawnedRows = ROWS - remaining.length;
       for (let row = ROWS - 1, cursor = 0; row >= 0; row -= 1, cursor += 1) {
         const index = indexOf(row, col);
         const tile = remaining[cursor];
         state.board[index] = tile?.type || randomType();
         state.boardRelics[index] = tile ? tile.relic : randomRuneRelic();
+        const dropRows = tile ? row - tile.sourceRow : spawnedRows;
+        if (dropRows > 0) dropPlan.set(index, dropRows);
       }
     }
+    return dropPlan;
   }
 
   function pulseResource(type, text, mode = 'gain') {
@@ -1665,16 +1680,16 @@
       let upgradeDetail = '';
       if (slot === 'armor') {
         const wallBefore = state.wall;
-        state.wallMax += 90;
-        state.wall = Math.min(state.wallMax, state.wall + 90);
+        state.wallMax += ARMOR_WALL_BONUS;
+        state.wall = Math.min(state.wallMax, state.wall + ARMOR_WALL_BONUS);
         const restored = Math.max(0, Math.round(state.wall - wallBefore));
-        upgradeDetail = `；耐久上限 +90${restored ? `，同步修复 ${restored}` : ''}`;
+        upgradeDetail = `；耐久上限 +${ARMOR_WALL_BONUS}，护盾上限 +${ARMOR_SHIELD_BONUS}${restored ? `，同步修复 ${restored}` : ''}`;
         const wallStatus = $('.wall-status');
         wallStatus.classList.remove('is-upgraded');
         void wallStatus.offsetWidth;
         wallStatus.classList.add('is-upgraded');
         scheduleGameTask(() => wallStatus.classList.remove('is-upgraded'), 950);
-        showCombatToast(`耐久上限 +90${restored ? ` · 修复 +${restored}` : ''}`, 'repair', 20, 48);
+        showCombatToast(`耐久上限 +${ARMOR_WALL_BONUS} · 护盾上限 +${ARMOR_SHIELD_BONUS}${restored ? ` · 修复 +${restored}` : ''}`, 'repair', 20, 48);
       }
       addLog(`消耗 ${cost} 点补强，${upgradeSlotLabel(slot)}从 LV.${state.equipment[slot] - 1} 升至 LV.${state.equipment[slot]}${upgradeDetail}${state.upgradeMode === 'auto' ? '；自动策略将重新选择目标' : ''}`);
       if (slot !== 'armor') showCombatToast('装备升级！', 'forge', 53, 48);
@@ -1697,7 +1712,7 @@
     updateFieldHud();
 
     $('#upgradeEquipmentName').textContent = equipmentName(slot);
-    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}${slot === 'armor' ? ' · 耐久上限 +90' : ''}`;
+    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}${slot === 'armor' ? ` · 耐久上限 +${ARMOR_WALL_BONUS} · 护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}`;
     banner.classList.remove('is-visible');
     card.classList.remove('is-upgraded');
     void banner.offsetWidth;
@@ -1807,7 +1822,7 @@
     const profile = getWaveProfile(wave, difficulty);
     const safeArmorLevel = Math.max(1, Math.floor(Number(armorLevel) || 1));
     const defense = wallDefenseForLevel(safeArmorLevel);
-    const wallMax = 1120 + (safeArmorLevel - 1) * 90;
+    const wallMax = 1120 + (safeArmorLevel - 1) * ARMOR_WALL_BONUS;
     const displayedDamage = Math.round(stats.damage * profile.damageScale);
     const finalDamage = Math.max(1, Math.round(displayedDamage * (1 - defense / 100)));
     return {

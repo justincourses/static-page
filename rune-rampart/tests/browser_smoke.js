@@ -48,6 +48,24 @@ function validSwap(board) {
   throw new Error('Generated board has no valid move');
 }
 
+function expectedDropPlan(matchIndices) {
+  const removed = new Set(matchIndices);
+  const plan = new Map();
+  for (let col = 0; col < 7; col += 1) {
+    const survivors = [];
+    for (let row = 6; row >= 0; row -= 1) {
+      if (!removed.has(row * 7 + col)) survivors.push(row);
+    }
+    const spawnedRows = 7 - survivors.length;
+    for (let row = 6, cursor = 0; row >= 0; row -= 1, cursor += 1) {
+      const sourceRow = survivors[cursor];
+      const dropRows = sourceRow === undefined ? spawnedRows : row - sourceRow;
+      if (dropRows > 0) plan.set(row * 7 + col, dropRows);
+    }
+  }
+  return plan;
+}
+
 async function assertMinimumFont(page, context) {
   const offenders = await page.evaluate(() => [...document.querySelectorAll('body *')]
     .filter((node) => {
@@ -253,14 +271,14 @@ let activeBrowser;
       banner: document.querySelector('#equipmentUpgradeBanner').innerText
     };
   });
-  if (armorUpgrade.after.equipment.armor !== armorUpgrade.before.equipment.armor + 1 || armorUpgrade.after.wallMax !== armorUpgrade.before.wallMax + 90 || armorUpgrade.after.wall !== armorUpgrade.before.wall + 90 || !armorUpgrade.wallAnimating || !armorUpgrade.armorAnimating || !armorUpgrade.log.includes('耐久上限 +90') || !armorUpgrade.banner.includes('耐久上限 +90')) throw new Error(`Defense upgrade did not visibly add wall durability: ${JSON.stringify(armorUpgrade)}`);
+  if (armorUpgrade.after.equipment.armor !== armorUpgrade.before.equipment.armor + 1 || armorUpgrade.after.wallMax !== armorUpgrade.before.wallMax + 90 || armorUpgrade.after.wall !== armorUpgrade.before.wall + 90 || armorUpgrade.after.shieldMax !== armorUpgrade.before.shieldMax + 45 || armorUpgrade.after.shield !== armorUpgrade.before.shield || !armorUpgrade.wallAnimating || !armorUpgrade.armorAnimating || !armorUpgrade.log.includes('耐久上限 +90') || !armorUpgrade.log.includes('护盾上限 +45') || !armorUpgrade.banner.includes('耐久上限 +90') || !armorUpgrade.banner.includes('护盾上限 +45')) throw new Error(`Defense upgrade did not visibly add wall and shield capacity: ${JSON.stringify(armorUpgrade)}`);
   await page.locator('#armorCard').dispatchEvent('pointerover', { relatedTarget: null });
   await page.waitForTimeout(80);
   const armorTooltip = await page.locator('#contextTooltip').innerText();
-  if (!armorTooltip.includes('耐久上限 +90') || !armorTooltip.includes('同步修复最多 90 点')) throw new Error(`Defense hover tip does not explain its durability benefit: ${armorTooltip}`);
+  if (!armorTooltip.includes('耐久上限 +90') || !armorTooltip.includes('护盾上限 +45') || !armorTooltip.includes('同步修复最多 90 点')) throw new Error(`Defense hover tip does not explain its durability and shield benefits: ${armorTooltip}`);
   await page.locator('#armorCard').evaluate((node) => node.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body })));
   await page.locator('[data-upgrade="weapon"]').click();
-  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选') && text.includes('耐久上限 +90'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
+  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选') && text.includes('耐久上限 +90') && text.includes('护盾上限 +45'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
   const loadoutParent = await page.locator('#weaponCard').evaluate((node) => node.parentElement?.parentElement?.className);
   if (!loadoutParent?.includes('compact-arsenal')) throw new Error('Full weapon values are not grouped below the upgrade console');
   const weaponPower = (await page.locator('#weaponStat').innerText()).match(/\d+/)?.[0];
@@ -337,6 +355,8 @@ let activeBrowser;
   const swappedBoard = [...board];
   [swappedBoard[first], swappedBoard[second]] = [swappedBoard[second], swappedBoard[first]];
   const futureMatches = [...matched(swappedBoard)];
+  const expectedFirstDrop = expectedDropPlan(futureMatches);
+  if (!expectedFirstDrop.size || expectedFirstDrop.size >= 49) throw new Error(`Drop-animation test did not produce a localized collapse: ${JSON.stringify({ futureMatches, expectedFirstDrop: [...expectedFirstDrop] })}`);
   const relicIndex = futureMatches.find((index) => index !== first && index !== second)
     ?? (futureMatches[0] === first ? second : futureMatches[0] === second ? first : futureMatches[0]);
   await page.evaluate(({ relicIndex }) => {
@@ -381,9 +401,16 @@ let activeBrowser;
   await page.waitForTimeout(190);
   const reinforcementFeedback = await page.evaluate(() => ({
     snapshot: window.__runeRampartTest.snapshot(),
-    delta: document.querySelector('.legend-item.coin .resource-delta.gain')?.textContent
+    delta: document.querySelector('.legend-item.coin .resource-delta.gain')?.textContent,
+    dropping: [...document.querySelectorAll('.rune-tile.is-dropping')].map((node) => ({
+      index: Number(node.dataset.index),
+      rows: Number(node.dataset.dropRows),
+      animationName: getComputedStyle(node).animationName
+    }))
   }));
   if (!(reinforcementFeedback.snapshot.forge > beforeMatchResources.forge) || !reinforcementFeedback.delta?.startsWith('+')) throw new Error(`Every match does not visibly advance reinforcement: ${JSON.stringify(reinforcementFeedback)}`);
+  const actualDropPlan = new Map(reinforcementFeedback.dropping.map(({ index, rows }) => [index, rows]));
+  if (actualDropPlan.size !== expectedFirstDrop.size || [...expectedFirstDrop].some(([index, rows]) => actualDropPlan.get(index) !== rows) || reinforcementFeedback.dropping.some(({ rows, animationName }) => rows < 1 || animationName !== 'tile-drop')) throw new Error(`Only tiles above cleared cells should animate and fall by their actual distance: ${JSON.stringify({ expected: [...expectedFirstDrop], actual: reinforcementFeedback.dropping })}`);
   await page.screenshot({ path: path.join(output, 'animation-drop.png'), fullPage: false });
   await page.waitForTimeout(700);
   const afterScore = Number(await page.locator('#scoreValue').innerText());
