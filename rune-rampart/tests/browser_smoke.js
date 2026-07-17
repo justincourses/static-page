@@ -142,6 +142,31 @@ let activeBrowser;
   await page.waitForTimeout(700);
 
   if (await page.locator('.rune-tile').count() !== 49) throw new Error('Board does not have 49 tiles');
+  await page.locator('.rune-tile').first().click();
+  if (await page.locator('.rune-tile.selected').count() !== 1) throw new Error('Short click no longer selects a rune after adding drag controls');
+  await page.locator('.rune-tile').first().click();
+  if (await page.locator('.rune-tile.selected').count() !== 0) throw new Error('Clicking the selected rune no longer cancels selection');
+  const cornerBeforeDrag = await page.evaluate(() => window.__runeRampartTest.snapshot().board.join(','));
+  const cornerBox = await page.locator('.rune-tile').first().boundingBox();
+  if (!cornerBox) throw new Error('Top-left rune is not visible for edge-drag testing');
+  await page.mouse.move(cornerBox.x + cornerBox.width / 2, cornerBox.y + cornerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cornerBox.x - cornerBox.width * .65, cornerBox.y + cornerBox.height / 2, { steps: 3 });
+  const edgeDrag = await page.evaluate(() => ({
+    options: document.querySelectorAll('.rune-tile.is-drag-option').length,
+    targets: document.querySelectorAll('.rune-tile.is-drag-target').length,
+    armed: document.querySelector('#matchBoard').classList.contains('is-drag-armed'),
+    originTransform: getComputedStyle(document.querySelector('.rune-tile.is-drag-origin')).transform
+  }));
+  if (edgeDrag.options !== 2 || edgeDrag.targets || edgeDrag.armed || edgeDrag.originTransform === 'none') throw new Error(`Board edge does not disable wall-facing drag directions: ${JSON.stringify(edgeDrag)}`);
+  await page.mouse.up();
+  await page.waitForTimeout(40);
+  const cornerAfterDrag = await page.evaluate(() => ({
+    board: window.__runeRampartTest.snapshot().board.join(','),
+    dragClasses: document.querySelectorAll('.is-drag-origin, .is-drag-option, .is-drag-target').length,
+    selected: document.querySelectorAll('.rune-tile.selected').length
+  }));
+  if (cornerAfterDrag.board !== cornerBeforeDrag || cornerAfterDrag.dragClasses || cornerAfterDrag.selected) throw new Error(`Disabled edge drag changed board state: ${JSON.stringify(cornerAfterDrag)}`);
   await assertMinimumFont(page, 'Desktop game');
   if (await page.locator('#waveValue').innerText() !== '001') throw new Error('Wave one did not start');
   if (await page.locator('#difficultyValue').innerText() !== '萌新') throw new Error('Selected difficulty was not applied');
@@ -259,7 +284,7 @@ let activeBrowser;
   });
   if (rulesView.sectionCount !== 6 || !rulesView.text.includes('四连额外 +1') || !rulesView.text.includes('五连及以上额外 +2') || !rulesView.text.includes('铸币组再额外 +1') || !rulesView.text.includes('按自身等级计算') || !rulesView.text.includes('彩蛋越稀有') || !rulesView.text.includes('立即冻结')) throw new Error(`Central rules dialog is incomplete: ${JSON.stringify(rulesView)}`);
   if (!rulesView.paused || rulesView.musicPlaying || rulesView.saveReason !== 'pause' || !rulesView.savePaused || !rulesView.boardLocked || rulesView.focused !== 'rulesClose') throw new Error(`Opening rules did not pause and save safely: ${JSON.stringify(rulesView)}`);
-  if (rulesView.conciseBoardHint !== '操作：交换相邻符文，连成三枚即可消除') throw new Error(`Board hint is still too verbose: ${rulesView.conciseBoardHint}`);
+  if (rulesView.conciseBoardHint !== '操作：点击相邻符文，或拖到邻位后松开') throw new Error(`Board hint does not explain release-to-swap controls: ${rulesView.conciseBoardHint}`);
   await assertMinimumFont(page, 'Rules dialog');
   await page.screenshot({ path: path.join(output, 'rules.png'), fullPage: false });
   await page.locator('#rulesClose').click();
@@ -437,9 +462,56 @@ let activeBrowser;
   }, { relicIndex });
   if (await page.locator('.rune-relic-mark').count() !== 1) throw new Error('Forced rune Easter egg marker did not render');
   const beforeMatchResources = await page.evaluate(() => window.__runeRampartTest.snapshot());
-  await page.locator('.rune-tile').nth(first).click();
-  await page.locator('.rune-tile').nth(second).click();
-  await page.locator('.match-primed').first().waitFor({ state: 'visible', timeout: 700 });
+  const firstBox = await page.locator('.rune-tile').nth(first).boundingBox();
+  const secondBox = await page.locator('.rune-tile').nth(second).boundingBox();
+  if (!firstBox || !secondBox) throw new Error('Valid drag-swap tiles are not visible');
+  const dragStart = { x: firstBox.x + firstBox.width / 2, y: firstBox.y + firstBox.height / 2 };
+  const dragEnd = { x: secondBox.x + secondBox.width / 2, y: secondBox.y + secondBox.height / 2 };
+  await page.mouse.move(dragStart.x, dragStart.y);
+  await page.mouse.down();
+  await page.mouse.move(
+    dragStart.x + (dragEnd.x - dragStart.x) * .18,
+    dragStart.y + (dragEnd.y - dragStart.y) * .18,
+    { steps: 2 }
+  );
+  const dragPreview = await page.evaluate(() => {
+    const origin = document.querySelector('.rune-tile.is-drag-origin');
+    return {
+      boardDragging: document.querySelector('#matchBoard').classList.contains('is-rune-dragging'),
+      boardArmed: document.querySelector('#matchBoard').classList.contains('is-drag-armed'),
+      originCount: document.querySelectorAll('.rune-tile.is-drag-origin').length,
+      optionCount: document.querySelectorAll('.rune-tile.is-drag-option').length,
+      targetCount: document.querySelectorAll('.rune-tile.is-drag-target').length,
+      dragX: origin?.style.getPropertyValue('--drag-x'),
+      dragY: origin?.style.getPropertyValue('--drag-y'),
+      cursor: origin ? getComputedStyle(origin).cursor : ''
+    };
+  });
+  const firstRow = Math.floor(first / 7);
+  const firstCol = first % 7;
+  const expectedDragOptions = 4 - Number(firstRow === 0) - Number(firstRow === 6) - Number(firstCol === 0) - Number(firstCol === 6);
+  if (!dragPreview.boardDragging || dragPreview.boardArmed || dragPreview.originCount !== 1 || dragPreview.optionCount !== expectedDragOptions || dragPreview.targetCount !== 1 || (!Number.parseFloat(dragPreview.dragX) && !Number.parseFloat(dragPreview.dragY)) || dragPreview.cursor !== 'grabbing') throw new Error(`Drag preview is not visible, bounded and directional: ${JSON.stringify(dragPreview)}`);
+  await page.screenshot({ path: path.join(output, 'drag-preview.png'), fullPage: false });
+  await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 5 });
+  const beforeRelease = await page.evaluate(() => ({
+    board: window.__runeRampartTest.snapshot().board.join(','),
+    locked: window.__runeRampartTest.snapshot().locked,
+    armed: document.querySelector('#matchBoard').classList.contains('is-drag-armed'),
+    targetArmed: document.querySelectorAll('.rune-tile.is-drag-target.is-drag-armed').length
+  }));
+  if (beforeRelease.board !== beforeMatchResources.board.join(',') || beforeRelease.locked || !beforeRelease.armed || beforeRelease.targetArmed !== 1) throw new Error(`Drag committed before pointer release: ${JSON.stringify(beforeRelease)}`);
+  await page.mouse.up();
+  await page.waitForTimeout(55);
+  const swapAnimation = await page.evaluate(() => ({
+    board: window.__runeRampartTest.snapshot().board.join(','),
+    locked: window.__runeRampartTest.snapshot().locked,
+    resolution: window.__runeRampartTest.snapshot().resolution,
+    committing: [...document.querySelectorAll('.rune-tile.is-swap-committing')].map((tile) => getComputedStyle(tile).transform),
+    dragging: document.querySelector('#matchBoard').classList.contains('is-rune-dragging')
+  }));
+  if (swapAnimation.board !== beforeMatchResources.board.join(',') || !swapAnimation.locked || swapAnimation.resolution?.phase !== 'validate' || swapAnimation.committing.length !== 2 || swapAnimation.committing.some((transform) => transform === 'none') || swapAnimation.dragging) throw new Error(`Release-to-swap animation is missing or mutates too early: ${JSON.stringify(swapAnimation)}`);
+  await page.screenshot({ path: path.join(output, 'swap-animation.png'), fullPage: false });
+  await page.locator('.match-primed').first().waitFor({ state: 'visible', timeout: 850 });
   await page.waitForTimeout(90);
   await page.locator('#pauseButton').click();
   const frozenChain = await page.evaluate(() => ({

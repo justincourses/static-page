@@ -126,7 +126,7 @@
             <div class="corner corner-tr"></div>
             <div class="corner corner-bl"></div>
             <div class="corner corner-br"></div>
-            <div class="match-board" id="matchBoard" role="grid" aria-label="七乘七符文棋盘"></div>
+            <div class="match-board" id="matchBoard" role="grid" aria-label="七乘七符文棋盘，可点击相邻符文，或拖向上下左右的相邻格并松开换位"></div>
             <div class="board-effects" id="boardEffects" aria-hidden="true"></div>
             <div class="cascade-callout" id="cascadeCallout" aria-hidden="true">
               <span>自动连锁</span>
@@ -136,7 +136,7 @@
             <div class="board-lock" id="boardLock" aria-hidden="true"><span>战局暂停</span></div>
           </div>
 
-          <p class="board-hint"><span>操作：</span>交换相邻符文，连成三枚即可消除</p>
+          <p class="board-hint"><span>操作：</span>点击相邻符文，或拖到邻位后松开</p>
         </section>
 
         <section class="panel battle-panel" aria-labelledby="battleTitle">
@@ -355,7 +355,8 @@
           <section class="rule-section rune-rule">
             <h3><i aria-hidden="true">✦</i> 符文消除</h3>
             <ul>
-              <li>交换相邻符文，连成 3 枚或以上即可消除。</li>
+              <li>点击两枚相邻符文，或按住一枚拖向上下左右的可用邻位；松开鼠标或手指后才会换位。</li>
+              <li>换位后连成 3 枚或以上即可消除；没有形成消除时，符文会自动换回原位。</li>
               <li>每个消除组提供 1 点补强；四连额外 +1，五连及以上额外 +2，铸币组再额外 +1。</li>
               <li>红曜石储备余烬齐射，蓝晶积蓄奥能；升级攻击会提高余烬上限，升级攻速会提高奥能上限。</li>
               <li>绿晶提供防御能量；能量先修复缺失耐久，剩余部分转化为护盾。能量与护盾上限均为耐久上限的 50%。</li>

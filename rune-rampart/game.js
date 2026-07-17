@@ -17,6 +17,7 @@
   const ARMOR_WALL_BONUS = 90;
   const ARMOR_SHIELD_BONUS = Math.round(ARMOR_WALL_BONUS * SHIELD_MAX_RATIO);
   const WAVE_INTERMISSION_MS = 3000;
+  const SWAP_ANIMATION_MS = 190;
   const VICTORY_SPEED_BUDGET_MS = 2 * 60 * 60 * 1000;
   const FORGE_START = 26;
   const FORGE_LEVEL_STEP = 10;
@@ -502,6 +503,8 @@
   let rulesReturnFocus = null;
   let leaderboardReturnFocus = null;
   let contextTooltipTarget = null;
+  let runeDragGesture = null;
+  let suppressBoardClickUntil = 0;
   const gameTasks = new Set();
 
   function tooltipTargetEnemy() {
@@ -1524,9 +1527,90 @@
     return false;
   }
 
+  function tilesAreAdjacent(first, second) {
+    const firstRow = Math.floor(first / COLS);
+    const firstCol = first % COLS;
+    const secondRow = Math.floor(second / COLS);
+    const secondCol = second % COLS;
+    return Math.abs(firstRow - secondRow) + Math.abs(firstCol - secondCol) === 1;
+  }
+
+  function adjacentTileIndices(index) {
+    const row = Math.floor(index / COLS);
+    const col = index % COLS;
+    return [
+      row > 0 ? index - COLS : null,
+      col < COLS - 1 ? index + 1 : null,
+      row < ROWS - 1 ? index + COLS : null,
+      col > 0 ? index - 1 : null
+    ].filter((candidate) => candidate !== null);
+  }
+
+  function tileExchangeOffset(firstTile, secondTile) {
+    if (!firstTile || !secondTile) return { x: 0, y: 0, distance: 0 };
+    const x = secondTile.offsetLeft - firstTile.offsetLeft;
+    const y = secondTile.offsetTop - firstTile.offsetTop;
+    return { x, y, distance: Math.max(Math.abs(x), Math.abs(y)) };
+  }
+
+  function setRuneDragOffset(tile, x, y) {
+    if (!tile) return;
+    tile.style.setProperty('--drag-x', `${x}px`);
+    tile.style.setProperty('--drag-y', `${y}px`);
+  }
+
+  async function animateTileExchange(first, second, dragVisual = null) {
+    const firstTile = dragVisual?.originTile || els.board.querySelector(`[data-index="${first}"]`);
+    const secondTile = dragVisual?.targetTile || els.board.querySelector(`[data-index="${second}"]`);
+    if (!firstTile || !secondTile) return;
+    const offset = tileExchangeOffset(firstTile, secondTile);
+    firstTile.classList.add('is-swap-committing');
+    secondTile.classList.add('is-swap-committing');
+    void firstTile.offsetWidth;
+    setRuneDragOffset(firstTile, offset.x, offset.y);
+    setRuneDragOffset(secondTile, -offset.x, -offset.y);
+    await wait(SWAP_ANIMATION_MS);
+  }
+
+  async function swapTiles(first, second, dragVisual = null) {
+    if (!state.started || state.paused || state.locked || state.gameOver || !tilesAreAdjacent(first, second)) return false;
+    const sessionId = state.sessionId;
+    state.locked = true;
+    state.resolution = { kind: 'swap', phase: 'validate', first, second };
+    state.selected = null;
+    sound.play('click', .15, 1.16);
+    await animateTileExchange(first, second, dragVisual);
+    if (sessionId !== state.sessionId) return false;
+    [state.board[first], state.board[second]] = [state.board[second], state.board[first]];
+    [state.boardRelics[first], state.boardRelics[second]] = [state.boardRelics[second], state.boardRelics[first]];
+    renderBoard();
+    if (findMatches().size === 0) {
+      sound.play('denied', .2, .82);
+      state.resolution.phase = 'reverting';
+      await animateTileExchange(first, second);
+      if (sessionId !== state.sessionId) return false;
+      [state.board[first], state.board[second]] = [state.board[second], state.board[first]];
+      [state.boardRelics[first], state.boardRelics[second]] = [state.boardRelics[second], state.boardRelics[first]];
+      renderBoard(new Set(), second);
+      await wait(280);
+      if (sessionId !== state.sessionId) return false;
+      renderBoard();
+      state.locked = false;
+      state.resolution = null;
+      flushPendingSave();
+      return false;
+    }
+    state.resolution = { kind: 'resolve', phase: 'matching' };
+    await resolveBoard(sessionId);
+    if (sessionId !== state.sessionId) return false;
+    state.locked = false;
+    state.resolution = null;
+    flushPendingSave();
+    return true;
+  }
+
   async function handleTile(index) {
     if (!state.started || state.paused || state.locked || state.gameOver) return;
-    const sessionId = state.sessionId;
     if (state.selected === null) {
       sound.play('click', .13, 1.05);
       state.selected = index;
@@ -1541,46 +1625,148 @@
     }
 
     const first = state.selected;
-    const firstRow = Math.floor(first / COLS);
-    const firstCol = first % COLS;
-    const nextRow = Math.floor(index / COLS);
-    const nextCol = index % COLS;
-    if (Math.abs(firstRow - nextRow) + Math.abs(firstCol - nextCol) !== 1) {
+    if (!tilesAreAdjacent(first, index)) {
       sound.play('click', .12, 1.08);
       state.selected = index;
       renderBoard();
       return;
     }
+    await swapTiles(first, index);
+  }
 
-    state.locked = true;
-    state.resolution = { kind: 'swap', phase: 'validate', first, second: index };
-    state.selected = null;
-    sound.play('click', .15, 1.16);
-    [state.board[first], state.board[index]] = [state.board[index], state.board[first]];
-    [state.boardRelics[first], state.boardRelics[index]] = [state.boardRelics[index], state.boardRelics[first]];
-    renderBoard();
-    await wait(160);
-    if (sessionId !== state.sessionId) return;
-    if (findMatches().size === 0) {
-      sound.play('denied', .2, .82);
-      [state.board[first], state.board[index]] = [state.board[index], state.board[first]];
-      [state.boardRelics[first], state.boardRelics[index]] = [state.boardRelics[index], state.boardRelics[first]];
-      state.resolution.phase = 'reverting';
-      renderBoard(new Set(), index);
-      await wait(280);
-      if (sessionId !== state.sessionId) return;
-      renderBoard();
-      state.locked = false;
-      state.resolution = null;
-      flushPendingSave();
+  function dragTargetIndex(startIndex, deltaX, deltaY) {
+    const row = Math.floor(startIndex / COLS);
+    const col = startIndex % COLS;
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+      if (deltaX > 0 && col < COLS - 1) return startIndex + 1;
+      if (deltaX < 0 && col > 0) return startIndex - 1;
+      return null;
+    }
+    if (deltaY > 0 && row < ROWS - 1) return startIndex + COLS;
+    if (deltaY < 0 && row > 0) return startIndex - COLS;
+    return null;
+  }
+
+  function clearRuneDrag(suppressClick = false) {
+    const gesture = runeDragGesture;
+    if (!gesture) return;
+    runeDragGesture = null;
+    if (suppressClick) suppressBoardClickUntil = performance.now() + 500;
+    [...new Set([gesture.originTile, gesture.targetTile, ...gesture.optionTiles])].forEach((tile) => {
+      tile?.classList.remove('is-drag-origin', 'is-drag-option', 'is-drag-target', 'is-drag-armed', 'is-swap-committing');
+      tile?.style.removeProperty('--drag-x');
+      tile?.style.removeProperty('--drag-y');
+    });
+    els.board.classList.remove('is-rune-dragging', 'is-drag-armed');
+    if (els.board.hasPointerCapture?.(gesture.pointerId)) {
+      try { els.board.releasePointerCapture(gesture.pointerId); } catch (error) { /* Capture can already be released by the browser. */ }
+    }
+  }
+
+  function releaseRuneDragForSwap(gesture) {
+    runeDragGesture = null;
+    suppressBoardClickUntil = performance.now() + 500;
+    gesture.optionTiles.forEach((tile) => tile.classList.remove('is-drag-option'));
+    els.board.classList.remove('is-rune-dragging', 'is-drag-armed');
+    if (els.board.hasPointerCapture?.(gesture.pointerId)) {
+      try { els.board.releasePointerCapture(gesture.pointerId); } catch (error) { /* Capture can already be released by the browser. */ }
+    }
+    return { originTile: gesture.originTile, targetTile: gesture.targetTile };
+  }
+
+  function beginRuneDrag(event) {
+    const tile = event.target.closest('.rune-tile');
+    if (!tile || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (!state.started || state.paused || state.locked || state.gameOver) return;
+    clearRuneDrag();
+    const startIndex = Number(tile.dataset.index);
+    const tileRect = tile.getBoundingClientRect();
+    const optionTiles = adjacentTileIndices(startIndex)
+      .map((index) => els.board.querySelector(`[data-index="${index}"]`))
+      .filter(Boolean);
+    runeDragGesture = {
+      pointerId: event.pointerId,
+      startIndex,
+      startX: event.clientX,
+      startY: event.clientY,
+      pointerScale: tile.offsetWidth ? tileRect.width / tile.offsetWidth : 1,
+      originTile: tile,
+      targetTile: null,
+      targetIndex: null,
+      optionTiles,
+      moved: false,
+      armed: false
+    };
+    tile.classList.add('is-drag-origin');
+    optionTiles.forEach((option) => option.classList.add('is-drag-option'));
+    els.board.classList.add('is-rune-dragging');
+    try { els.board.setPointerCapture(event.pointerId); } catch (error) { /* Pointer capture is optional on older browsers. */ }
+  }
+
+  function moveRuneDrag(event) {
+    const gesture = runeDragGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    if (!state.started || state.paused || state.locked || state.gameOver) {
+      clearRuneDrag(gesture.moved);
       return;
     }
-    state.resolution = { kind: 'resolve', phase: 'matching' };
-    await resolveBoard(sessionId);
-    if (sessionId !== state.sessionId) return;
-    state.locked = false;
-    state.resolution = null;
-    flushPendingSave();
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    const horizontal = Math.abs(deltaX) >= Math.abs(deltaY);
+    const dominantDistance = horizontal ? Math.abs(deltaX) : Math.abs(deltaY);
+    const targetIndex = dragTargetIndex(gesture.startIndex, deltaX, deltaY);
+    const targetTile = targetIndex === null ? null : els.board.querySelector(`[data-index="${targetIndex}"]`);
+
+    gesture.moved = gesture.moved || Math.hypot(deltaX, deltaY) > 6;
+    if (gesture.targetTile !== targetTile) {
+      gesture.targetTile?.classList.remove('is-drag-target', 'is-drag-armed');
+      gesture.targetTile?.style.removeProperty('--drag-x');
+      gesture.targetTile?.style.removeProperty('--drag-y');
+    }
+    gesture.targetTile = targetTile;
+    gesture.targetIndex = targetIndex;
+    gesture.targetTile?.classList.add('is-drag-target');
+    if (gesture.moved) event.preventDefault();
+
+    if (!targetTile) {
+      gesture.armed = false;
+      setRuneDragOffset(gesture.originTile, 0, 0);
+      els.board.classList.remove('is-drag-armed');
+      return;
+    }
+
+    const offset = tileExchangeOffset(gesture.originTile, targetTile);
+    const layoutDistance = dominantDistance / Math.max(.01, gesture.pointerScale);
+    const previewProgress = offset.distance ? clamp(layoutDistance / offset.distance, 0, .46) : 0;
+    setRuneDragOffset(gesture.originTile, offset.x * previewProgress, offset.y * previewProgress);
+    setRuneDragOffset(targetTile, -offset.x * previewProgress, -offset.y * previewProgress);
+    const swapThreshold = Math.max(14, offset.distance * .28);
+    gesture.armed = layoutDistance >= swapThreshold;
+    targetTile.classList.toggle('is-drag-armed', gesture.armed);
+    els.board.classList.toggle('is-drag-armed', gesture.armed);
+  }
+
+  function endRuneDrag(event) {
+    const gesture = runeDragGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const { moved, startIndex, targetIndex, armed } = gesture;
+    if (!moved) {
+      clearRuneDrag(true);
+      void handleTile(startIndex);
+      return;
+    }
+    if (!armed || targetIndex === null || !gesture.targetTile) {
+      clearRuneDrag(true);
+      return;
+    }
+    const dragVisual = releaseRuneDragForSwap(gesture);
+    void swapTiles(startIndex, targetIndex, dragVisual);
+  }
+
+  function cancelRuneDrag(event) {
+    const gesture = runeDragGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    clearRuneDrag(gesture.moved);
   }
 
   async function resolveBoard(sessionId) {
@@ -2532,6 +2718,7 @@
     if (nextPaused === state.paused) return;
     const now = performance.now();
     if (nextPaused) {
+      clearRuneDrag(true);
       closePlaySegment(now);
       state.paused = true;
       state.pausedAt = now;
@@ -2572,6 +2759,7 @@
 
   function resetGame() {
     cancelAnimationFrame(state.animationId);
+    clearRuneDrag(true);
     music.stop();
     sound.init();
     clearSavedProgress();
@@ -2654,6 +2842,7 @@
 
   function returnToBriefing() {
     cancelAnimationFrame(state.animationId);
+    clearRuneDrag(true);
     music.stop();
     clearSavedProgress();
     state.sessionId += 1;
@@ -2761,7 +2950,16 @@
     scheduleGameFit();
   }
 
+  els.board.addEventListener('pointerdown', beginRuneDrag);
+  els.board.addEventListener('pointermove', moveRuneDrag, { passive: false });
+  els.board.addEventListener('pointerup', endRuneDrag);
+  els.board.addEventListener('pointercancel', cancelRuneDrag);
+  els.board.addEventListener('lostpointercapture', cancelRuneDrag);
   els.board.addEventListener('click', (event) => {
+    if (event.detail !== 0 && performance.now() < suppressBoardClickUntil) {
+      event.preventDefault();
+      return;
+    }
     const tile = event.target.closest('.rune-tile');
     if (tile) handleTile(Number(tile.dataset.index));
   });
