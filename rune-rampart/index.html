@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171913" />
+    <title>符文壁垒 · Rune Rampart</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23171913'/%3E%3Cpath d='M32 7 53 22 45 49 32 58 19 49 11 22Z' fill='%23d55237' stroke='%23f1ead6' stroke-width='4'/%3E%3Cpath d='M32 17v31M21 30h22' stroke='%23f1ead6' stroke-width='4'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <main class="game-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="chapter-mark">第七防线</span>
+          <div>
+            <h1>符文壁垒</h1>
+            <p>Rune Rampart / 三消驱动型塔防</p>
+          </div>
+        </div>
+
+        <div class="campaign-stats" aria-label="战局数据">
+          <div class="stat-stamp">
+            <span>波次</span>
+            <strong id="waveValue">01</strong>
+          </div>
+          <div class="stat-stamp">
+            <span>歼敌</span>
+            <strong id="killValue">000</strong>
+          </div>
+          <div class="stat-stamp score-stamp">
+            <span>军功</span>
+            <strong id="scoreValue">00000</strong>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="text-button" id="helpButton" type="button">作战说明</button>
+          <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭音效" title="关闭音效">
+            <span class="sound-icon" aria-hidden="true">♪</span>
+          </button>
+          <button class="icon-button" id="pauseButton" type="button" aria-label="暂停游戏" title="暂停游戏">
+            <span class="pause-icon">Ⅱ</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="status-rail" aria-label="堡垒状态">
+        <div class="wall-status">
+          <div class="meter-copy">
+            <span>城墙耐久</span>
+            <strong><span id="wallValue">1000</span> / <span id="wallMaxValue">1000</span></strong>
+          </div>
+          <div class="meter-track wall-track"><span id="wallMeter"></span></div>
+        </div>
+        <div class="threat-status">
+          <span class="pulse-dot"></span>
+          <span id="threatText">第一波斥候正在逼近</span>
+        </div>
+        <div class="power-status">
+          <span>当前战力</span>
+          <strong id="powerValue">24</strong>
+          <small id="powerDelta">弩炮自动射击</small>
+        </div>
+      </section>
+
+      <div class="game-grid">
+        <section class="panel rune-panel" aria-labelledby="runeTitle">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">符文工坊 / 01</span>
+              <h2 id="runeTitle">调度符文</h2>
+            </div>
+            <div class="combo-badge" id="comboBadge">
+              <span>连锁</span>
+              <strong id="comboValue">×1</strong>
+            </div>
+          </div>
+
+          <div class="rune-legend" aria-label="符文效果">
+            <div class="legend-item ember"><i>◆</i><span>战力</span><strong id="mightValue">0</strong></div>
+            <div class="legend-item mana"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
+            <div class="legend-item moss"><i>⬟</i><span>修复</span><strong id="repairValue">0</strong></div>
+            <div class="legend-item coin"><i>●</i><span>锻造</span><strong id="forgeValue">0</strong></div>
+          </div>
+
+          <div class="board-frame">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+            <div class="match-board" id="matchBoard" role="grid" aria-label="七乘七符文棋盘"></div>
+            <div class="board-effects" id="boardEffects" aria-hidden="true"></div>
+            <div class="cascade-callout" id="cascadeCallout" aria-hidden="true">
+              <span>自动连锁</span>
+              <strong>×2</strong>
+              <small>符文共鸣</small>
+            </div>
+            <div class="board-lock" id="boardLock" aria-hidden="true"><span>战局暂停</span></div>
+          </div>
+
+          <p class="board-hint"><span>拖动策略：</span>点击两枚相邻符文交换，三枚以上即可激活</p>
+        </section>
+
+        <section class="panel battle-panel" aria-labelledby="battleTitle">
+          <div class="panel-heading battle-heading">
+            <div>
+              <span class="eyebrow">北境防线 / 02</span>
+              <h2 id="battleTitle">坚守灰烬隘口</h2>
+            </div>
+            <div class="wave-chip"><span id="waveState">敌军 0 / 7</span><i></i></div>
+          </div>
+
+          <div class="battlefield" id="battlefield" aria-label="塔防战场">
+            <div class="sky-scratches"></div>
+            <div class="mountain mountain-a"></div>
+            <div class="mountain mountain-b"></div>
+            <div class="watchtower far-one"></div>
+            <div class="watchtower far-two"></div>
+            <div class="battle-sun"></div>
+            <div class="lane-lines"><i></i><i></i><i></i></div>
+
+            <div class="fortress" id="fortress">
+              <div class="flag"><span></span></div>
+              <div class="turret"><i></i></div>
+              <div class="keep"><span></span><span></span><span></span></div>
+              <div class="wall-blocks"><i></i><i></i><i></i></div>
+            </div>
+
+            <div class="enemies-layer" id="enemiesLayer"></div>
+            <div class="projectiles-layer" id="projectilesLayer"></div>
+            <div class="combat-toast-layer" id="combatToastLayer"></div>
+
+            <div class="wave-announcement" id="waveAnnouncement">
+              <span>WAVE 01</span>
+              <strong>斥候来袭</strong>
+            </div>
+
+            <div class="battle-log" id="battleLog" aria-live="polite">
+              <p><span>军情</span> 第一波敌军已进入射程</p>
+            </div>
+          </div>
+
+          <div class="tactics-row">
+            <button class="skill-card" id="volleyButton" type="button" disabled>
+              <span class="skill-icon">✦</span>
+              <span><strong>奥术齐射</strong><small>全场伤害 · 消耗 18 奥能</small></span>
+              <kbd>Q</kbd>
+            </button>
+            <div class="next-wave">
+              <span>下一批敌军</span>
+              <strong id="nextWaveValue">交战中</strong>
+            </div>
+          </div>
+
+          <section class="arsenal" aria-labelledby="arsenalTitle">
+            <div class="arsenal-heading">
+              <div>
+                <span class="eyebrow">自动军械库</span>
+                <h3 id="arsenalTitle">守城装备</h3>
+              </div>
+              <div class="forge-meter-wrap">
+                <span>锻造进度 <b id="forgeProgressText">0 / 18</b></span>
+                <div class="meter-track forge-track"><span id="forgeMeter"></span></div>
+              </div>
+            </div>
+
+            <div class="equipment-grid">
+              <article class="equipment-card weapon-card" id="weaponCard">
+                <div class="equipment-art crossbow-art"><i></i><i></i><b></b></div>
+                <div><span>主武器 · LV.<b id="weaponLevel">1</b></span><strong id="weaponName">新兵弩</strong><small id="weaponStat">伤害 +7</small></div>
+              </article>
+              <article class="equipment-card armor-card" id="armorCard">
+                <div class="equipment-art shield-art"><i></i><b></b></div>
+                <div><span>防御 · LV.<b id="armorLevel">1</b></span><strong id="armorName">橡木城栅</strong><small id="armorStat">耐久 +120</small></div>
+              </article>
+              <article class="equipment-card charm-card" id="charmCard">
+                <div class="equipment-art horn-art"><i></i><b></b></div>
+                <div><span>战术 · LV.<b id="charmLevel">1</b></span><strong id="charmName">斥候号角</strong><small id="charmStat">攻速 +6%</small></div>
+              </article>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <div class="modal-backdrop is-open" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+      <div class="briefing-card">
+        <button class="modal-close" id="introClose" type="button" aria-label="关闭说明">×</button>
+        <span class="briefing-kicker">第七防线 · 紧急征召令</span>
+        <h2 id="introTitle">一手调度符文，<br />一手守住城墙。</h2>
+        <p>敌军不会等你。交换左侧相邻符文完成消除，所有收益会立刻注入右侧战场。</p>
+        <div class="briefing-rules">
+          <div><i class="ember">◆</i><span><b>红曜石</b>永久提升弩炮战力</span></div>
+          <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，发动全场齐射</span></div>
+          <div><i class="moss">⬟</i><span><b>绿晶</b>即时修复受损城墙</span></div>
+          <div><i class="coin">●</i><span><b>铸币</b>自动锻造并装备更强军械</span></div>
+        </div>
+        <button class="primary-button" id="startButton" type="button"><span>接受征召</span><small>开始守城</small></button>
+        <p class="briefing-note">提示：四连与连续坠落会产生额外收益。</p>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="gameOverModal" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
+      <div class="briefing-card game-over-card">
+        <span class="briefing-kicker">城墙失守 · 战报归档</span>
+        <h2 id="gameOverTitle">火种未熄，<br />防线可以重建。</h2>
+        <div class="final-stats">
+          <div><span>坚守波次</span><strong id="finalWave">0</strong></div>
+          <div><span>歼灭敌军</span><strong id="finalKills">0</strong></div>
+          <div><span>最终军功</span><strong id="finalScore">0</strong></div>
+        </div>
+        <button class="primary-button" id="restartButton" type="button"><span>重整防线</span><small>再次出征</small></button>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
