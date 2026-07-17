@@ -267,6 +267,7 @@ let activeBrowser;
   if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'true' || !await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music toggle did not resume playback');
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
 
+  const beforeWeaponUpgrade = await page.evaluate(() => window.__runeRampartTest.snapshot());
   await page.locator('[data-upgrade="weapon"]').click();
   await page.evaluate(() => window.__runeRampartTest.grantForge());
   await page.locator('.loadout-stat.is-upgraded').waitFor({ state: 'visible', timeout: 800 });
@@ -276,8 +277,13 @@ let activeBrowser;
   );
   if (equipmentLevelTotal !== 4 || await page.locator('#weaponLevel').innerText() !== '2') throw new Error(`Attack-priority upgrade did not apply: ${equipmentLevelTotal}`);
   if (!await page.locator('#upgradeEquipmentLevel').innerText().then((text) => text.includes('消耗 26 补强'))) throw new Error('Upgrade banner does not explain reinforcement consumption');
-  const upgradedWeaponTarget = await page.evaluate(() => window.__runeRampartTest.snapshot());
-  if (upgradedWeaponTarget.upgradeTargetSlot !== 'weapon' || upgradedWeaponTarget.forgeTarget <= 26 || !await page.locator('#forgeTargetName').innerText().then((text) => text.includes('攻击 LV.2→3'))) throw new Error(`Attack cost did not rise with its own level: ${JSON.stringify(upgradedWeaponTarget)}`);
+  const upgradedWeaponTarget = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    emberHud: document.querySelector('#emberValue').textContent,
+    banner: document.querySelector('#equipmentUpgradeBanner').innerText,
+    log: document.querySelector('#battleLog').innerText
+  }));
+  if (upgradedWeaponTarget.snapshot.upgradeTargetSlot !== 'weapon' || upgradedWeaponTarget.snapshot.forgeTarget <= 26 || upgradedWeaponTarget.snapshot.emberCapacity !== beforeWeaponUpgrade.emberCapacity + 4 || upgradedWeaponTarget.snapshot.emberCharges !== beforeWeaponUpgrade.emberCharges || !upgradedWeaponTarget.emberHud.endsWith(`/ ${upgradedWeaponTarget.snapshot.emberCapacity}`) || !upgradedWeaponTarget.banner.includes('余烬上限 +4') || !upgradedWeaponTarget.log.includes('余烬上限 +4') || !await page.locator('#forgeTargetName').innerText().then((text) => text.includes('攻击 LV.2→3'))) throw new Error(`Attack upgrade did not raise its own cost and ember capacity: ${JSON.stringify(upgradedWeaponTarget)}`);
   await page.locator('[data-upgrade="armor"]').click();
   const armorTarget = await page.evaluate(() => window.__runeRampartTest.snapshot());
   if (armorTarget.upgradeTargetSlot !== 'armor' || armorTarget.forgeTarget !== 26 || !await page.locator('#forgeTargetName').innerText().then((text) => text.includes('防御 LV.1→2'))) throw new Error(`Switching priority did not reveal the defense-specific cost: ${JSON.stringify(armorTarget)}`);
@@ -304,8 +310,22 @@ let activeBrowser;
   const armorTooltip = await page.locator('#contextTooltip').innerText();
   if (!armorTooltip.includes('耐久上限 +90') || !armorTooltip.includes('护盾上限 +45') || !armorTooltip.includes('同步修复最多 90 点')) throw new Error(`Defense hover tip does not explain its durability and shield benefits: ${armorTooltip}`);
   await page.locator('#armorCard').evaluate((node) => node.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: document.body })));
+  const speedUpgrade = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    const before = test.snapshot();
+    test.grantForge();
+    const after = test.snapshot();
+    return {
+      before,
+      after,
+      manaHud: document.querySelector('#manaValue').textContent,
+      banner: document.querySelector('#equipmentUpgradeBanner').innerText,
+      log: document.querySelector('#battleLog').innerText
+    };
+  });
+  if (speedUpgrade.after.equipment.charm !== speedUpgrade.before.equipment.charm + 1 || speedUpgrade.after.manaCapacity !== speedUpgrade.before.manaCapacity + 9 || speedUpgrade.after.mana !== speedUpgrade.before.mana || !speedUpgrade.manaHud.endsWith(`/ ${speedUpgrade.after.manaCapacity}`) || !speedUpgrade.banner.includes('奥能上限 +9') || !speedUpgrade.log.includes('奥能上限 +9')) throw new Error(`Attack-speed upgrade did not visibly increase mana capacity: ${JSON.stringify(speedUpgrade)}`);
   await page.locator('[data-upgrade="weapon"]').click();
-  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选') && text.includes('耐久上限 +90') && text.includes('护盾上限 +45'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
+  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选') && text.includes('余烬上限 +4') && text.includes('奥能上限 +9') && text.includes('耐久上限 +90') && text.includes('护盾上限 +45') && text.includes('固定整备 3 秒'))) throw new Error('Per-item upgrade and fixed intermission rules are missing from the central rules dialog');
   const loadoutParent = await page.locator('#weaponCard').evaluate((node) => node.parentElement?.parentElement?.className);
   if (!loadoutParent?.includes('compact-arsenal')) throw new Error('Full weapon values are not grouped below the upgrade console');
   const weaponPower = (await page.locator('#weaponStat').innerText()).match(/\d+/)?.[0];
@@ -366,12 +386,13 @@ let activeBrowser;
       projectilesAdded: document.querySelectorAll('.projectile').length - before,
       emberProjectiles: document.querySelectorAll('.projectile.is-ember-charged').length,
       emberHud: document.querySelector('#emberValue').textContent,
+      emberCapacity: window.__runeRampartTest.snapshot().emberCapacity,
       spendFeedback: document.querySelector('.legend-item.ember .resource-delta.spend')?.textContent,
       muzzleError: Math.hypot(muzzlePoint.x - projectilePoint.x, muzzlePoint.y - projectilePoint.y)
     };
   });
   if (burstResult.volleySize !== 2 || burstResult.projectilesAdded < 2) throw new Error(`Attack-speed multishot did not render: ${JSON.stringify(burstResult)}`);
-  if (!burstResult.emberCharged || burstResult.emberCharges !== 1 || burstResult.emberProjectiles < 2 || burstResult.emberHud !== '1' || burstResult.spendFeedback !== '-1') throw new Error(`Ember gain/consumption is not perceptible: ${JSON.stringify(burstResult)}`);
+  if (!burstResult.emberCharged || burstResult.emberCharges !== 1 || burstResult.emberProjectiles < 2 || burstResult.emberHud !== `1 / ${burstResult.emberCapacity}` || burstResult.spendFeedback !== '-1') throw new Error(`Ember gain/consumption is not perceptible: ${JSON.stringify(burstResult)}`);
   if (burstResult.muzzleError > 1) throw new Error(`Projectile does not originate at the cannon muzzle: ${JSON.stringify(burstResult)}`);
   await page.screenshot({ path: path.join(output, 'multishot.png'), fullPage: false });
 
@@ -509,18 +530,18 @@ let activeBrowser;
     return {
       support,
       snapshot,
-      legend: document.querySelector('#shieldValue').textContent,
+      legend: document.querySelector('#energyValue').textContent,
       rail: document.querySelector('#shieldRailValue').textContent,
       meterWidth: Number.parseFloat(document.querySelector('#shieldMeter').style.width),
       log: document.querySelector('#battleLog').innerText,
       ruleText: document.querySelector('#rulesModal').textContent
     };
   });
-  if (shieldFlow.support.restored !== 20 || shieldFlow.support.shieldGained !== 30 || shieldFlow.snapshot.wall !== shieldFlow.snapshot.wallMax || shieldFlow.snapshot.shield !== 30 || shieldFlow.legend !== '30' || shieldFlow.rail !== '30' || !(shieldFlow.meterWidth > 0) || !shieldFlow.log.includes('耐久 +20 · 护盾 +30') || !shieldFlow.ruleText.includes('剩余点数转为护盾') || !shieldFlow.ruleText.includes('再消耗护盾')) throw new Error(`Green rune did not repair first and convert overflow to shield: ${JSON.stringify(shieldFlow)}`);
+  if (shieldFlow.support.restored !== 20 || shieldFlow.support.shieldGained !== 30 || shieldFlow.support.energyAccepted !== 50 || shieldFlow.support.energyCapacity !== shieldFlow.snapshot.shieldMax || shieldFlow.snapshot.wall !== shieldFlow.snapshot.wallMax || shieldFlow.snapshot.shield !== 30 || shieldFlow.legend !== `30 / ${shieldFlow.snapshot.shieldMax}` || shieldFlow.rail !== '30' || !(shieldFlow.meterWidth > 0) || !shieldFlow.log.includes('防御能量分配：耐久 +20 · 护盾 +30') || !shieldFlow.ruleText.includes('绿晶提供防御能量') || !shieldFlow.ruleText.includes('剩余部分转化为护盾') || !shieldFlow.ruleText.includes('再消耗护盾')) throw new Error(`Green rune energy was not visibly split between repair and shield: ${JSON.stringify(shieldFlow)}`);
   await page.locator('.legend-item.moss').hover();
   await page.waitForTimeout(80);
-  const shieldTooltip = await page.locator('#contextTooltip').innerText();
-  if (!shieldTooltip.includes(`护盾 30 / ${shieldFlow.snapshot.shieldMax}`) || !shieldTooltip.includes('先补足缺失耐久') || !shieldTooltip.includes('受到伤害时先扣护盾')) throw new Error(`Shield hover tip is incomplete: ${shieldTooltip}`);
+  const energyTooltip = await page.locator('#contextTooltip').innerText();
+  if (!energyTooltip.includes(`防御能量 30 / ${shieldFlow.snapshot.shieldMax}`) || !energyTooltip.includes('先用于修复缺失耐久') || !energyTooltip.includes('剩余能量转化为护盾') || !energyTooltip.includes('受到伤害时先扣护盾')) throw new Error(`Energy hover tip is incomplete: ${energyTooltip}`);
   await page.mouse.move(0, 0);
   const selfDestruct = await page.evaluate(() => {
     const test = window.__runeRampartTest;
@@ -536,7 +557,7 @@ let activeBrowser;
       impactAttached: Boolean(document.querySelector('.impact-flash.self-destruct')),
       enemyAnimating: Boolean(document.querySelector('.enemy.is-self-destructing')),
       wallText: document.querySelector('#wallValue').textContent,
-      shieldText: document.querySelector('#shieldValue').textContent,
+      shieldText: document.querySelector('#energyValue').textContent.split('/')[0].trim(),
       ruleText: document.querySelector('#rulesModal').textContent
     };
     test.setEquipment('armor', 1);
@@ -598,7 +619,7 @@ let activeBrowser;
     snapshot: window.__runeRampartTest.snapshot(),
     save: JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null')
   }));
-  if (pausedState.save?.reason !== 'pause' || pausedState.save.wave !== pausedState.snapshot.wave || pausedState.save.shield !== pausedState.snapshot.shield || pausedState.save.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Pause checkpoint is incomplete: ${JSON.stringify(pausedState)}`);
+  if (pausedState.save?.reason !== 'pause' || pausedState.save.wave !== pausedState.snapshot.wave || pausedState.save.shield !== pausedState.snapshot.shield || pausedState.save.emberCharges !== pausedState.snapshot.emberCharges || pausedState.save.mana !== pausedState.snapshot.mana || pausedState.save.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Pause checkpoint is incomplete: ${JSON.stringify(pausedState)}`);
 
   const resumePage = await page.context().newPage({ viewport: { width: 980, height: 820 } });
   resumePage.on('pageerror', (error) => errors.push(`resume pageerror: ${error.message}`));
@@ -623,7 +644,7 @@ let activeBrowser;
     log: document.querySelector('#battleLog').innerText,
     lockVisible: document.querySelector('#boardLock').classList.contains('is-visible')
   }));
-  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.lockVisible || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.shield !== pausedState.snapshot.shield || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Continue did not immediately resume the saved campaign: ${JSON.stringify({ pausedState, restoredState })}`);
+  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.lockVisible || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.shield !== pausedState.snapshot.shield || restoredState.snapshot.emberCharges !== pausedState.snapshot.emberCharges || restoredState.snapshot.emberCapacity !== pausedState.snapshot.emberCapacity || restoredState.snapshot.mana !== pausedState.snapshot.mana || restoredState.snapshot.manaCapacity !== pausedState.snapshot.manaCapacity || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Continue did not immediately resume the saved campaign: ${JSON.stringify({ pausedState, restoredState })}`);
   if (!restoredState.music.enabled || !restoredState.music.playing) throw new Error(`Music did not resume immediately: ${JSON.stringify(restoredState)}`);
   await resumePage.waitForTimeout(80);
   const runningAfterRestore = await resumePage.evaluate(() => window.__runeRampartTest.snapshot());
@@ -688,6 +709,9 @@ let activeBrowser;
     if (!(sample.rookie.runeRelicChance > sample.veteran.runeRelicChance && sample.veteran.runeRelicChance > sample.master.runeRelicChance)) {
       throw new Error(`Rune Easter eggs do not become rarer at higher difficulty on wave ${sample.wave}`);
     }
+    if ([sample.rookie, sample.veteran, sample.master].some((profile) => profile.intermission !== 3000)) {
+      throw new Error(`Cleared waves do not use the fixed three-second intermission at wave ${sample.wave}`);
+    }
   }
   const wave10 = balance.samples.find((sample) => sample.wave === 10).master;
   const wave11 = balance.samples.find((sample) => sample.wave === 11).master;
@@ -720,6 +744,20 @@ let activeBrowser;
   if (balance.strongMaster.firstFailure === null || balance.eliteMaster.firstFailure !== null || !(balance.eliteMaster.minimumMargin > 1 && balance.eliteMaster.minimumMargin < 1.08)) throw new Error(`Master is not calibrated for a tiny elite clear window: ${JSON.stringify({ strong: balance.strongMaster, elite: balance.eliteMaster })}`);
   const eliteLevels = Object.values(balance.eliteMaster.equipment);
   if (Math.max(...eliteLevels) - Math.min(...eliteLevels) > 1) throw new Error(`Elite auto-upgrade is not balanced: ${JSON.stringify(balance.eliteMaster.equipment)}`);
+
+  await page.evaluate(() => window.__runeRampartTest.clearWave(2));
+  await page.waitForTimeout(150);
+  const earlyClearIntermission = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    countdown: document.querySelector('#nextWaveValue').textContent,
+    tooltipRule: (() => {
+      const target = document.querySelector('.next-wave');
+      target.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      return document.querySelector('#contextTooltipBody').textContent;
+    })()
+  }));
+  if (earlyClearIntermission.snapshot.wave !== 2 || earlyClearIntermission.snapshot.intermissionRemaining < 2700 || earlyClearIntermission.snapshot.intermissionRemaining > 3000 || earlyClearIntermission.countdown !== '3 秒' || !earlyClearIntermission.tooltipRule.includes('固定整备 3 秒')) throw new Error(`Early-cleared wave did not enter the fixed three-second intermission: ${JSON.stringify(earlyClearIntermission)}`);
+  await page.mouse.move(0, 0);
 
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.waitForTimeout(350);
@@ -862,12 +900,25 @@ let activeBrowser;
       horizontalFit: card.scrollWidth <= card.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1
     };
   });
-  if (victoryView.rank !== '#01' || victoryView.difficulty !== '老兵' || victoryView.boardParent !== 'victoryHistorySlot' || victoryView.currentRows !== 1 || victoryView.rows[0]?.[2] !== '100 波' || !victoryView.breakdown.includes('波次 150,000') || !victoryView.history[0]?.victory || victoryView.history[0]?.clearedWaves !== 100 || victoryView.score.replace(/\D/g, '') !== String(victoryView.history[0]?.settlementScore) || !victoryView.horizontalFit) throw new Error(`Victory settlement does not show and highlight the persisted leaderboard: ${JSON.stringify(victoryView)}`);
+  if (victoryView.rank !== '#01' || victoryView.difficulty !== '老兵' || victoryView.boardParent !== 'victoryHistorySlot' || victoryView.currentRows !== 1 || victoryView.rows[0]?.[2] !== '100 波' || !victoryView.breakdown.includes('波次 150,000') || !victoryView.breakdown.includes('速通奖励') || !victoryView.history[0]?.victory || victoryView.history[0]?.clearedWaves !== 100 || victoryView.score.replace(/\D/g, '') !== String(victoryView.history[0]?.settlementScore) || !victoryView.horizontalFit) throw new Error(`Victory settlement does not show and highlight the persisted leaderboard: ${JSON.stringify(victoryView)}`);
   await page.locator('[data-history-filter="veteran"]').click();
   if (await page.locator('#historyRows tr.is-current td').first().innerText() !== '#01') throw new Error('Victory leaderboard cannot switch to and rerank the current difficulty');
   await page.locator('[data-history-filter="all"]').click();
   await assertMinimumFont(page, 'Victory settlement leaderboard');
   await page.screenshot({ path: path.join(output, 'victory-settlement.png'), fullPage: false });
+  const speedRanking = await page.evaluate(() => {
+    const [fast] = window.__runeRampartTest.history();
+    const slow = {
+      ...fast,
+      id: 'slower-higher-score-clear',
+      achievedAt: fast.achievedAt + 1,
+      activePlayMs: fast.activePlayMs + 60000,
+      settlementScore: fast.settlementScore + 999999,
+      baseScore: fast.baseScore + 999999
+    };
+    return window.__runeRampartTest.setHistory([slow, fast]);
+  });
+  if (speedRanking[0]?.id === 'slower-higher-score-clear' || !(speedRanking[0]?.activePlayMs < speedRanking[1]?.activePlayMs) || !(speedRanking[0]?.settlementScore < speedRanking[1]?.settlementScore)) throw new Error(`Faster 100-wave clear is not ranked before a slower higher-score clear: ${JSON.stringify(speedRanking)}`);
   await page.locator('#victoryRestartButton').click();
   await page.locator('#introModal.is-open').waitFor({ state: 'visible', timeout: 500 });
 

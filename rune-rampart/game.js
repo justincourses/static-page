@@ -5,11 +5,17 @@
   const COLS = 7;
   const MAX_WAVES = 100;
   const SECONDARY_BOLT_POWER = .45;
-  const EMBER_CHARGE_CAP = 24;
+  const EMBER_BASE_CAP = 24;
+  const EMBER_CAP_PER_WEAPON_LEVEL = 4;
+  const MANA_BASE_CAP = 54;
+  const MANA_CAP_PER_CHARM_LEVEL = 9;
+  const MANA_CAST_COST = 18;
   const EMBER_DAMAGE_MULTIPLIER = 1.25;
   const SHIELD_MAX_RATIO = .5;
   const ARMOR_WALL_BONUS = 90;
   const ARMOR_SHIELD_BONUS = Math.round(ARMOR_WALL_BONUS * SHIELD_MAX_RATIO);
+  const WAVE_INTERMISSION_MS = 3000;
+  const VICTORY_SPEED_BUDGET_MS = 2 * 60 * 60 * 1000;
   const FORGE_START = 26;
   const FORGE_LEVEL_STEP = 10;
   const FORGE_LATE_STEP = 2;
@@ -554,15 +560,15 @@
         title: `本波消除 ${state.waveMatches} / ${profile.requiredGroups} 组`,
         body: state.waveMatches >= profile.requiredGroups ? '本波建议目标已完成；继续消除仍会获得资源和补强。' : `还差 ${profile.requiredGroups - state.waveMatches} 组达到建议节奏；这是引导目标，不会扣除已有收益。`
       },
-      combo: { title: `当前连锁 ×${state.combo}`, body: state.combo > 1 ? '连续掉落形成的新消除会提高奥能、耐久/护盾与军功收益。' : '一次交换后若自动形成连续消除，连锁倍率会逐段提高。' },
-      ember: { title: `余烬储备 ${state.emberCharges} / ${EMBER_CHARGE_CAP}`, body: '每枚红曜石提供 1 次余烬齐射；下一轮开火消耗 1 次，使整轮伤害提高 25%。' },
-      mana: { title: `奥能 ${state.mana} / 18`, body: state.mana >= 18 ? '奥术齐射已经就绪：点击技能或按 Q，对所有已进场敌人造成伤害。' : `还需 ${18 - state.mana} 点即可发动奥术齐射；蓝晶消除会积蓄奥能。` },
-      shield: { title: `护盾 ${Math.ceil(state.shield)} / ${shieldCapacity()}`, body: `绿晶先补足缺失耐久，剩余点数转为护盾；护盾上限为耐久上限的 50%。受到伤害时先扣护盾，再扣城墙耐久。` },
+      combo: { title: `当前连锁 ×${state.combo}`, body: state.combo > 1 ? '连续掉落形成的新消除会提高奥能、防御能量与军功收益。' : '一次交换后若自动形成连续消除，连锁倍率会逐段提高。' },
+      ember: { title: `余烬储备 ${state.emberCharges} / ${emberCapacity()}`, body: `每枚红曜石提供 1 次余烬齐射；下一轮开火消耗 1 次，使整轮伤害提高 25%。攻击每升一级，储备上限 +${EMBER_CAP_PER_WEAPON_LEVEL}。` },
+      mana: { title: `奥能 ${state.mana} / ${manaCapacity()}`, body: state.mana >= MANA_CAST_COST ? `奥术齐射已经就绪：每次消耗 ${MANA_CAST_COST} 点；攻速每升一级，奥能上限 +${MANA_CAP_PER_CHARM_LEVEL}。` : `还需 ${MANA_CAST_COST - state.mana} 点即可发动奥术齐射；当前上限 ${manaCapacity()}，攻速每升一级上限 +${MANA_CAP_PER_CHARM_LEVEL}。` },
+      energy: { title: `防御能量 ${Math.ceil(state.shield)} / ${shieldCapacity()}`, body: `绿晶产生防御能量：获得时先用于修复缺失耐久，剩余能量转化为护盾；能量与护盾上限均为耐久上限的 50%。受到伤害时先扣护盾，再扣城墙耐久。` },
       forge: { title: `可用补强 ${state.forge}`, body: `当前目标：${upgradeLabel} LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}，需要 ${state.forgeTarget} 点。切换目标不会损失进度。` },
       waveState: { title: remainingEnemies ? `本波剩余 ${remainingEnemies} 敌` : '本波区域肃清', body: `总计 ${state.waveTotal} 敌，每批最多 ${profile.batchSize} 个；场外敌人进场前无法锁定。` },
-      allyAttack: { title: `我方攻击 ${totalPower()}`, body: '主炮弹以该数值为基础，再结算敌方防御；余烬可以令整轮伤害提高 25%。' },
+      allyAttack: { title: `我方攻击 ${totalPower()} · 余烬上限 ${emberCapacity()}`, body: `主炮弹以该数值为基础，再结算敌方防御；攻击每升一级还会使余烬储备上限 +${EMBER_CAP_PER_WEAPON_LEVEL}。` },
       allyDefense: { title: `城防减伤 ${wallDefense()}% · 护盾 ${Math.ceil(state.shield)}`, body: `敌人伤害先减免 ${wallDefense()}%，再由护盾吸收；每次升级防御还会使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}，并同步修复最多 ${ARMOR_WALL_BONUS} 点。` },
-      allySpeed: { title: `有效射速 ${attackRate()} / 秒`, body: `当前为${volleyLabel()}；攻速升级会缩短间隔，并逐步把单发变为最多四枚齐射。` },
+      allySpeed: { title: `有效射速 ${attackRate()} / 秒 · 奥能上限 ${manaCapacity()}`, body: `当前为${volleyLabel()}；攻速升级会缩短间隔、增加齐射弹数，并使奥能上限 +${MANA_CAP_PER_CHARM_LEVEL}。` },
       targetDamage: {
         title: enemy ? `目标伤害 ${enemy.damage}` : '目标伤害 —',
         body: enemy ? (() => {
@@ -576,12 +582,12 @@
         body: enemy ? `当前约抵消 ${Math.round((1 - 100 / (100 + effectiveDefense(enemy) * 2)) * 100)}% 的弩炮伤害；破甲会暂时降低防御。` : '尚无已进场且可锁定的敌人。'
       },
       targetHealth: { title: enemy ? `目标生命 ${Math.max(0, Math.ceil(enemy.hp))} / ${enemy.maxHp}` : '目标生命 —', body: enemy ? '生命归零即被歼灭；若先抵达终点则自爆并从战场移除。' : '尚无已进场且可锁定的敌人。' },
-      arcaneVolley: { title: state.mana >= 18 ? '奥术齐射 · 就绪' : `奥术齐射 · ${state.mana} / 18 奥能`, body: `消耗 18 奥能，对所有已进场敌人造成约 ${Math.round(42 + totalPower() * .65)} 点基础伤害；场外敌人不受影响。` },
-      nextWave: { title: state.intermissionUntil ? `下一波还有 ${Math.max(0, Math.ceil((state.intermissionUntil - performance.now()) / 1000))} 秒` : '下一批交战中', body: '清空当前波后进入短暂整备，再自动开始下一波并保存进度。' },
+      arcaneVolley: { title: state.mana >= MANA_CAST_COST ? '奥术齐射 · 就绪' : `奥术齐射 · ${state.mana} / ${MANA_CAST_COST} 奥能`, body: `消耗 ${MANA_CAST_COST} 奥能，对所有已进场敌人造成约 ${Math.round(42 + totalPower() * .65)} 点基础伤害；场外敌人不受影响。` },
+      nextWave: { title: state.intermissionUntil ? `下一波还有 ${Math.max(0, Math.ceil((state.intermissionUntil - performance.now()) / 1000))} 秒` : '下一批交战中', body: `本波敌军全部肃清后固定整备 ${WAVE_INTERMISSION_MS / 1000} 秒，再自动开始下一波并保存进度。` },
       forgeProgress: { title: `${upgradeLabel}补强 ${state.forge} / ${state.forgeTarget}`, body: `升级目标为 LV.${state.equipment[upgradeSlot]}→${state.equipment[upgradeSlot] + 1}。每个消除组 +1，四连与五连、铸币组会获得额外补强。` },
-      weaponLoadout: { title: `${equipmentName('weapon')} · LV.${state.equipment.weapon}`, body: `当前攻击 ${totalPower()}；升级后提高每枚弩炮的基础伤害。` },
+      weaponLoadout: { title: `${equipmentName('weapon')} · LV.${state.equipment.weapon}`, body: `当前攻击 ${totalPower()}、余烬上限 ${emberCapacity()}；每升一级同时提高伤害，并使余烬上限 +${EMBER_CAP_PER_WEAPON_LEVEL}。` },
       armorLoadout: { title: `${equipmentName('armor')} · LV.${state.equipment.armor}`, body: `当前减伤 ${wallDefense()}%，城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax}、护盾上限 ${shieldCapacity()}；每升一级使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}，并同步修复最多 ${ARMOR_WALL_BONUS} 点。` },
-      charmLoadout: { title: `${equipmentName('charm')} · LV.${state.equipment.charm}`, body: `当前 ${attackRate()} 次/秒、${volleyLabel()}；副弹造成主弹 45% 的基础伤害。` }
+      charmLoadout: { title: `${equipmentName('charm')} · LV.${state.equipment.charm}`, body: `当前 ${attackRate()} 次/秒、${volleyLabel()}、奥能上限 ${manaCapacity()}；每升一级使奥能上限 +${MANA_CAP_PER_CHARM_LEVEL}。` }
     };
 
     if (key === 'upgradeStrategy') {
@@ -589,9 +595,12 @@
       const slot = mode === 'auto' ? currentUpgradeSlot('auto') : mode;
       const label = upgradeSlotLabel(slot);
       const cost = forgeCostFor(slot);
+      const bonus = slot === 'armor'
+        ? `耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}`
+        : slot === 'weapon' ? `余烬上限 +${EMBER_CAP_PER_WEAPON_LEVEL}` : `奥能上限 +${MANA_CAP_PER_CHARM_LEVEL}`;
       return mode === 'auto'
-        ? { title: `自动 · 本次${label}`, body: `本次会把 ${cost} 补强用于${label} LV.${state.equipment[slot]}→${state.equipment[slot] + 1}；完成后自动重新选择最低等级项目${slot === 'armor' ? `。城防升级还会使耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}。` }
-        : { title: `${label}优先`, body: `切换后持续补强${label}；下一级需要 ${cost} 点。当前 ${state.forge} 点会完整保留${slot === 'armor' ? `；升级时耐久上限 +${ARMOR_WALL_BONUS}、护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}。` };
+        ? { title: `自动 · 本次${label}`, body: `本次会把 ${cost} 补强用于${label} LV.${state.equipment[slot]}→${state.equipment[slot] + 1}，并获得${bonus}；完成后自动重新选择最低等级项目。` }
+        : { title: `${label}优先`, body: `切换后持续补强${label}；下一级需要 ${cost} 点并获得${bonus}。当前 ${state.forge} 点会完整保留。` };
     }
     return models[key] || { title: '战场提示', body: '移动鼠标查看这个模块的规则与当前状态。' };
   }
@@ -729,19 +738,27 @@
       : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
+  function settlementTimeScore(activePlayMs, victory = false) {
+    const seconds = Math.floor(Math.max(0, activePlayMs) / 1000);
+    return victory
+      ? Math.max(0, Math.floor((VICTORY_SPEED_BUDGET_MS / 1000 - seconds) * 2))
+      : seconds * 2;
+  }
+
   function normalizeHistoryRecord(record, index = 0) {
     if (!record || !DIFFICULTIES[record.difficulty]) return null;
     const achievedAt = Math.floor(safeNumber(record.achievedAt, Date.now(), 1));
     const activePlayMs = Math.floor(safeNumber(record.activePlayMs, 0, 0, 1000 * 60 * 60 * 48));
     const clearedWaves = Math.floor(safeNumber(record.clearedWaves, 0, 0, MAX_WAVES));
+    const victory = Boolean(record.victory) || clearedWaves >= MAX_WAVES;
     const baseScore = Math.floor(safeNumber(record.baseScore, record.score, 0, 1000000000));
     const waveScore = Math.floor(safeNumber(record.waveScore, clearedWaves * 1500, 0, 1000000000));
-    const timeScore = Math.floor(safeNumber(record.timeScore, Math.floor(activePlayMs / 1000) * 2, 0, 1000000000));
+    const timeScore = Math.floor(safeNumber(record.timeScore, settlementTimeScore(activePlayMs, victory), 0, 1000000000));
     return {
       id: String(record.id || `${achievedAt}-${index}`),
       achievedAt,
       difficulty: record.difficulty,
-      victory: Boolean(record.victory),
+      victory,
       clearedWaves,
       activePlayMs,
       baseScore,
@@ -758,6 +775,7 @@
     return [...records].sort((first, second) => (
       DIFFICULTY_PRIORITY[second.difficulty] - DIFFICULTY_PRIORITY[first.difficulty]
       || second.clearedWaves - first.clearedWaves
+      || (first.clearedWaves >= MAX_WAVES && second.clearedWaves >= MAX_WAVES ? first.activePlayMs - second.activePlayMs : 0)
       || second.settlementScore - first.settlementScore
       || second.kills - first.kills
       || second.totalMatches - first.totalMatches
@@ -785,7 +803,7 @@
     const activePlayMs = Math.floor(currentActivePlayMs());
     const clearedWaves = victory ? MAX_WAVES : Math.max(0, state.wave - 1);
     const waveScore = clearedWaves * 1500;
-    const timeScore = Math.floor(activePlayMs / 1000) * 2;
+    const timeScore = settlementTimeScore(activePlayMs, victory);
     const achievedAt = Date.now();
     return normalizeHistoryRecord({
       id: `${achievedAt}-${Math.random().toString(36).slice(2, 8)}`,
@@ -897,7 +915,7 @@
     $('#victoryTime').textContent = formatBattleTime(record.activePlayMs);
     $('#victoryScore').textContent = record.settlementScore.toLocaleString('zh-CN');
     $('#victoryRank').textContent = `#${String(rank).padStart(2, '0')}`;
-    $('#victoryScoreBreakdown').textContent = `基础军功 ${record.baseScore.toLocaleString('zh-CN')} + 波次 ${record.waveScore.toLocaleString('zh-CN')} + 坚守时间 ${record.timeScore.toLocaleString('zh-CN')}`;
+    $('#victoryScoreBreakdown').textContent = `基础军功 ${record.baseScore.toLocaleString('zh-CN')} + 波次 ${record.waveScore.toLocaleString('zh-CN')} + 速通奖励 ${record.timeScore.toLocaleString('zh-CN')}`;
     settlementHistory = history;
     currentSettlementId = record.id;
     activeHistoryFilter = 'all';
@@ -1141,8 +1159,8 @@
     state.score = Math.floor(safeNumber(save.score, 0, 0));
     state.kills = Math.floor(safeNumber(save.kills, 0, 0));
     state.wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
-    state.emberCharges = Math.floor(safeNumber(save.emberCharges, 0, 0, EMBER_CHARGE_CAP));
-    state.mana = Math.floor(safeNumber(save.mana, 0, 0, 99));
+    state.emberCharges = Math.floor(safeNumber(save.emberCharges, 0, 0, 1000000));
+    state.mana = Math.floor(safeNumber(save.mana, 0, 0, 1000000));
     state.shield = 0;
     state.repaired = Math.floor(safeNumber(save.repaired, 0, 0));
     state.forge = Math.floor(safeNumber(save.forge, 0, 0, 1000000));
@@ -1152,6 +1170,8 @@
       armor: Math.floor(safeNumber(save.equipment?.armor, 1, 1, 100)),
       charm: Math.floor(safeNumber(save.equipment?.charm, 1, 1, 100))
     };
+    state.emberCharges = Math.min(state.emberCharges, emberCapacity());
+    state.mana = Math.min(state.mana, manaCapacity());
     state.upgradeMode = ['auto', 'weapon', 'armor', 'charm'].includes(save.upgradeMode) ? save.upgradeMode : 'auto';
     state.autoUpgradeIndex = Math.floor(safeNumber(save.autoUpgradeIndex, 0, 0, 1000000));
     syncForgeTarget();
@@ -1244,7 +1264,7 @@
       relicChance: clamp(difficulty.relicChance + tier * difficulty.relicGrowth, difficulty.relicChance, difficulty.relicChance + difficulty.relicGrowth * 10),
       runeRelicChance: difficulty.runeRelicChance,
       spawnInterval: Math.max(280, (1050 - (safeWave - 1) * 3.2 - tier * 52) / difficulty.pressure),
-      intermission: Math.max(1500, 3500 - tier * 180)
+      intermission: WAVE_INTERMISSION_MS
     };
   }
 
@@ -1677,7 +1697,7 @@
     state.score += Math.round(total * 12 * multiplier);
     if (counts.ember) {
       const previous = state.emberCharges;
-      state.emberCharges = Math.min(EMBER_CHARGE_CAP, state.emberCharges + counts.ember);
+      state.emberCharges = Math.min(emberCapacity(), state.emberCharges + counts.ember);
       const gain = state.emberCharges - previous;
       pulseResource('ember', gain ? `+${gain}` : '已满');
       showCombatToast(gain ? `余烬 +${gain}` : '余烬已满', 'damage', 26, 32);
@@ -1685,7 +1705,7 @@
     if (counts.mana) {
       const gain = Math.round(counts.mana * 2 * multiplier);
       const previous = state.mana;
-      state.mana = Math.min(99, state.mana + gain);
+      state.mana = Math.min(manaCapacity(), state.mana + gain);
       const accepted = state.mana - previous;
       pulseResource('mana', accepted ? `+${accepted}` : '已满');
       showCombatToast(accepted ? `奥能 +${accepted}` : '奥能已满', 'mana', 39, 24);
@@ -1703,7 +1723,7 @@
       addLog(`补强 +${reinforcement.total}（基础 ${reinforcement.base}，${bonuses}）`);
     }
     checkForge();
-    if (chain > 1) addLog(`${chain} 连锁！奥能、耐久/护盾与军功收益提升 ${Math.round((multiplier - 1) * 100)}%`);
+    if (chain > 1) addLog(`${chain} 连锁！奥能、防御能量与军功收益提升 ${Math.round((multiplier - 1) * 100)}%`);
     updateUI();
   }
 
@@ -1713,10 +1733,22 @@
       const cost = forgeCostFor(slot);
       if (state.forge < cost) break;
       state.forge -= cost;
+      const previousEmberCapacity = emberCapacity();
+      const previousManaCapacity = manaCapacity();
       state.equipment[slot] += 1;
       if (state.upgradeMode === 'auto') state.autoUpgradeIndex += 1;
       let upgradeDetail = '';
-      if (slot === 'armor') {
+      if (slot === 'weapon') {
+        const capacityGain = emberCapacity() - previousEmberCapacity;
+        upgradeDetail = `；余烬上限 +${capacityGain}`;
+        pulseResource('ember', `上限 +${capacityGain}`);
+        showCombatToast(`余烬上限 +${capacityGain}`, 'damage', 26, 32);
+      } else if (slot === 'charm') {
+        const capacityGain = manaCapacity() - previousManaCapacity;
+        upgradeDetail = `；奥能上限 +${capacityGain}`;
+        pulseResource('mana', `上限 +${capacityGain}`);
+        showCombatToast(`奥能上限 +${capacityGain}`, 'mana', 39, 24);
+      } else if (slot === 'armor') {
         const wallBefore = state.wall;
         state.wallMax += ARMOR_WALL_BONUS;
         state.wall = Math.min(state.wallMax, state.wall + ARMOR_WALL_BONUS);
@@ -1730,7 +1762,6 @@
         showCombatToast(`耐久上限 +${ARMOR_WALL_BONUS} · 护盾上限 +${ARMOR_SHIELD_BONUS}${restored ? ` · 修复 +${restored}` : ''}`, 'repair', 20, 48);
       }
       addLog(`消耗 ${cost} 点补强，${upgradeSlotLabel(slot)}从 LV.${state.equipment[slot] - 1} 升至 LV.${state.equipment[slot]}${upgradeDetail}${state.upgradeMode === 'auto' ? '；自动策略将重新选择目标' : ''}`);
-      if (slot !== 'armor') showCombatToast('装备升级！', 'forge', 53, 48);
       scheduleGameTask(() => pulseResource('coin', `-${cost}`, 'spend'), 180);
       celebrateEquipmentUpgrade(slot, cost);
     }
@@ -1750,7 +1781,10 @@
     updateFieldHud();
 
     $('#upgradeEquipmentName').textContent = equipmentName(slot);
-    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}${slot === 'armor' ? ` · 耐久上限 +${ARMOR_WALL_BONUS} · 护盾上限 +${ARMOR_SHIELD_BONUS}` : ''}`;
+    const capacityDetail = slot === 'armor'
+      ? `耐久上限 +${ARMOR_WALL_BONUS} · 护盾上限 +${ARMOR_SHIELD_BONUS}`
+      : slot === 'weapon' ? `余烬上限 +${EMBER_CAP_PER_WEAPON_LEVEL}` : `奥能上限 +${MANA_CAP_PER_CHARM_LEVEL}`;
+    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'} · ${capacityDetail}`;
     banner.classList.remove('is-visible');
     card.classList.remove('is-upgraded');
     void banner.offsetWidth;
@@ -1795,6 +1829,14 @@
 
   function totalPower() {
     return weaponPower(state.equipment.weapon);
+  }
+
+  function emberCapacity(level = state.equipment.weapon) {
+    return EMBER_BASE_CAP + Math.max(0, Math.floor(Number(level) || 1) - 1) * EMBER_CAP_PER_WEAPON_LEVEL;
+  }
+
+  function manaCapacity(level = state.equipment.charm) {
+    return MANA_BASE_CAP + Math.max(0, Math.floor(Number(level) || 1) - 1) * MANA_CAP_PER_CHARM_LEVEL;
   }
 
   function baseAttackDelay() {
@@ -1849,10 +1891,20 @@
     if (announce) {
       const delta = [restored ? `耐久 +${restored}` : '', shieldGained ? `护盾 +${shieldGained}` : ''].filter(Boolean).join(' · ');
       pulseResource('moss', accepted ? `+${accepted}` : '已满');
-      showCombatToast(delta || '耐久与护盾已满', 'shield', 20, 53);
-      addLog(delta ? `绿晶生效：${delta}` : '绿晶能量溢散：耐久与护盾均已达到上限');
+      showCombatToast(delta || '能量已满', 'shield', 20, 53);
+      addLog(delta ? `防御能量分配：${delta}` : '防御能量溢散：耐久与护盾均已达到上限');
     }
-    return { offered, restored, shieldGained, accepted, shield: state.shield, shieldMax: shieldCapacity(), wall: state.wall };
+    return {
+      offered,
+      accepted,
+      energyAccepted: accepted,
+      energyCapacity: shieldCapacity(),
+      restored,
+      shieldGained,
+      shield: state.shield,
+      shieldMax: shieldCapacity(),
+      wall: state.wall
+    };
   }
 
   function breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
@@ -1946,9 +1998,9 @@
     $('#waveValue').textContent = String(state.wave).padStart(3, '0');
     $('#killValue').textContent = String(state.kills).padStart(3, '0');
     $('#scoreValue').textContent = String(state.score).padStart(5, '0');
-    $('#emberValue').textContent = state.emberCharges;
-    $('#manaValue').textContent = state.mana;
-    $('#shieldValue').textContent = Math.ceil(state.shield);
+    $('#emberValue').textContent = `${state.emberCharges} / ${emberCapacity()}`;
+    $('#manaValue').textContent = `${state.mana} / ${manaCapacity()}`;
+    $('#energyValue').textContent = `${Math.ceil(state.shield)} / ${shieldCapacity()}`;
     $('#forgeValue').textContent = state.forge;
     $('#pressureTierValue').textContent = `第 ${profile.stage} 阶段${profile.isBossWave ? ' · BOSS' : ''}`;
     $('#waveMatchValue').textContent = state.waveMatches;
@@ -1965,7 +2017,7 @@
     updateUpgradeTargetUI();
     $('#forgeMeter').style.width = `${Math.min(100, state.forge / state.forgeTarget * 100)}%`;
     $('#forgeProgressText').textContent = `${state.forge} / ${state.forgeTarget}`;
-    els.volleyButton.disabled = state.mana < 18 || state.paused || state.gameOver;
+    els.volleyButton.disabled = state.mana < MANA_CAST_COST || state.paused || state.gameOver;
 
     ['weapon', 'armor', 'charm'].forEach((slot) => {
       const level = state.equipment[slot];
@@ -2339,10 +2391,10 @@
   }
 
   function castVolley() {
-    if (state.mana < 18 || state.paused || state.gameOver) return;
-    state.mana -= 18;
-    pulseResource('mana', '-18', 'spend');
-    showCombatToast('奥能 -18', 'mana', 39, 24);
+    if (state.mana < MANA_CAST_COST || state.paused || state.gameOver) return;
+    state.mana -= MANA_CAST_COST;
+    pulseResource('mana', `-${MANA_CAST_COST}`, 'spend');
+    showCombatToast(`奥能 -${MANA_CAST_COST}`, 'mana', 39, 24);
     sound.tone(220, .35, 'sine', .045);
     sound.tone(440, .38, 'triangle', .04, .08);
     sound.tone(660, .42, 'sine', .035, .16);
@@ -2397,7 +2449,7 @@
             completeVictory();
             return;
           }
-          state.intermissionUntil = now + (state.waveProfile?.intermission || 3000);
+          state.intermissionUntil = now + WAVE_INTERMISSION_MS;
           state.score += Math.round(150 * state.wave * DIFFICULTIES[state.difficulty].scoreScale);
           const matchResult = state.waveMatches >= state.waveProfile.requiredGroups ? '补强达标' : '补强不足';
           addLog(`第 ${state.wave} 波肃清，${matchResult}（${state.waveMatches}/${state.waveProfile.requiredGroups} 组）`);
@@ -2748,11 +2800,11 @@
         updateUI();
       },
       setEmberCharges(amount = 0) {
-        state.emberCharges = Math.max(0, Math.min(EMBER_CHARGE_CAP, Math.floor(Number(amount) || 0)));
+        state.emberCharges = Math.max(0, Math.min(emberCapacity(), Math.floor(Number(amount) || 0)));
         updateUI();
       },
       grantMana(amount = 18) {
-        state.mana = Math.min(99, state.mana + Math.max(0, Math.floor(Number(amount) || 18)));
+        state.mana = Math.min(manaCapacity(), state.mana + Math.max(0, Math.floor(Number(amount) || MANA_CAST_COST)));
         updateUI();
       },
       reinforcementReward(groups = []) {
@@ -2917,6 +2969,8 @@
       setEquipment(slot, level) {
         if (!['weapon', 'armor', 'charm'].includes(slot)) return;
         state.equipment[slot] = Math.max(1, Math.floor(Number(level) || 1));
+        state.emberCharges = Math.min(state.emberCharges, emberCapacity());
+        state.mana = Math.min(state.mana, manaCapacity());
         updateUI();
       },
       fireBurst() {
@@ -2951,6 +3005,7 @@
           upgradeMode: state.upgradeMode,
           upgradeTargetSlot: currentUpgradeSlot(),
           wave: state.wave,
+          intermissionRemaining: state.intermissionUntil ? Math.max(0, state.intermissionUntil - performance.now()) : 0,
           score: state.score,
           kills: state.kills,
           wall: state.wall,
@@ -2964,7 +3019,9 @@
           combatBuffQueue: state.combatBuffQueue.map((buff) => ({ ...buff })),
           runeRelics: [...state.boardRelics],
           emberCharges: state.emberCharges,
+          emberCapacity: emberCapacity(),
           mana: state.mana,
+          manaCapacity: manaCapacity(),
           repaired: state.repaired,
           forge: state.forge,
           forgeTarget: state.forgeTarget,

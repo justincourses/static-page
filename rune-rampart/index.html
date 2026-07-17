@@ -117,7 +117,7 @@
           <div class="rune-legend" aria-label="符文效果">
             <div class="legend-item ember" data-tooltip-key="ember"><i>◆</i><span>余烬</span><strong id="emberValue">0</strong></div>
             <div class="legend-item mana" data-tooltip-key="mana"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
-            <div class="legend-item moss" data-tooltip-key="shield"><i>⬟</i><span>护盾</span><strong id="shieldValue">0</strong></div>
+            <div class="legend-item moss" data-tooltip-key="energy"><i>⬟</i><span>能量</span><strong id="energyValue">0 / 560</strong></div>
             <div class="legend-item coin" data-tooltip-key="forge"><i>●</i><span>补强</span><strong id="forgeValue">0</strong></div>
           </div>
 
@@ -313,9 +313,9 @@
         </div>
 
         <div class="briefing-rules">
-          <div><i class="ember">◆</i><span><b>红曜石</b>每枚储备 1 次余烬齐射，整轮伤害 +25%</span></div>
-          <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，发动全场齐射</span></div>
-          <div><i class="moss">⬟</i><span><b>绿晶</b>先补耐久，溢出能量转为护盾</span></div>
+          <div><i class="ember">◆</i><span><b>红曜石</b>储备余烬，储备上限随攻击成长</span></div>
+          <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，奥能上限随攻速成长</span></div>
+          <div><i class="moss">⬟</i><span><b>绿晶</b>产生防御能量：先修耐久，剩余转为护盾</span></div>
           <div><i class="coin">●</i><span><b>补强</b>每组消除均推进；长连和铸币组额外增加</span></div>
         </div>
         <p class="briefing-music-note"><b>♫ 20 首 MIDI 军乐</b><span>科罗贝尼基 · 欢乐颂 · 四季 · 传统民谣 · 原创战曲 / 自动循环，可随时切歌</span></p>
@@ -357,7 +357,8 @@
             <ul>
               <li>交换相邻符文，连成 3 枚或以上即可消除。</li>
               <li>每个消除组提供 1 点补强；四连额外 +1，五连及以上额外 +2，铸币组再额外 +1。</li>
-              <li>红曜石储备余烬齐射，蓝晶积蓄奥能；绿晶先补足耐久，剩余点数转为护盾，护盾上限为耐久上限的 50%。</li>
+              <li>红曜石储备余烬齐射，蓝晶积蓄奥能；升级攻击会提高余烬上限，升级攻速会提高奥能上限。</li>
+              <li>绿晶提供防御能量；能量先修复缺失耐久，剩余部分转化为护盾。能量与护盾上限均为耐久上限的 50%。</li>
             </ul>
           </section>
 
@@ -366,6 +367,7 @@
             <ul>
               <li>攻击、防御、攻速分别按自身等级计算下一级费用，等级越高费用越高。</li>
               <li>切换优先目标不会损失已有补强；“自动”会为本次升级选定目标，升级后再重选。</li>
+              <li>攻击每升一级使余烬上限 +4；攻速每升一级使奥能上限 +9。</li>
               <li>防御每升一级增加减伤，并使城墙耐久上限 +90、护盾上限 +45，同时修复最多 90 点耐久。</li>
               <li>补强增加与升级消费都会在 HUD、数值动画和军情中明确反馈。</li>
             </ul>
@@ -378,6 +380,7 @@
               <li>未被消灭的敌人抵达终点会自爆：先应用城防减伤，再消耗护盾，最后才扣耐久。</li>
               <li>敌军分速度、攻击、防御、均衡与 Boss 型，外观和战斗属性各不相同。</li>
               <li>攻速提高后会逐步变为多枚齐射；奥能达到 18 点可发动全场攻击。</li>
+              <li>一波敌军全部肃清后固定整备 3 秒，随后自动开始下一波。</li>
             </ul>
           </section>
 
@@ -395,7 +398,9 @@
             <ul>
               <li>新手适合熟悉规则；老兵约有一半玩家难以通关；大佬面向极限挑战。</li>
               <li>更高难度会提高敌军数量、速度与高阶怪密度，同时降低彩蛋出现率。</li>
-              <li>结算榜按难度优先，再比较波次、总分、歼敌与消除成绩。</li>
+              <li>结算榜按难度优先；同难度均通关 100 波时，用时越短排名越前。</li>
+              <li>通关速通奖励以 2 小时为基准，每提前 1 秒获得 2 分，超时不扣分。</li>
+              <li>未通关战报再比较波次、总分、歼敌与消除成绩。</li>
             </ul>
           </section>
 
@@ -433,7 +438,7 @@
         <div class="score-ledger">
           <span>结算分构成</span>
           <strong id="finalScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
-          <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；历史榜先按大佬、老兵、新手分层，再比较波次、总分、歼敌与消除，完全相同时较早战报优先。</small>
+          <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；历史榜先按大佬、老兵、新手分层，同难度通关者优先按用时从短到长排列，未通关者再比较波次、总分、歼敌与消除。</small>
         </div>
         <div id="failureHistorySlot">
           <section class="history-board" id="historyBoard" aria-labelledby="historyTitle">
@@ -477,8 +482,8 @@
         </div>
         <div class="score-ledger victory-ledger">
           <span>登顶分构成</span>
-          <strong id="victoryScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
-          <small>本局已写入浏览器历史榜；可切换总榜、大佬、老兵和新手榜查看排名。</small>
+          <strong id="victoryScoreBreakdown">基础军功 0 + 波次 0 + 速通奖励 0</strong>
+          <small>速通奖励以 2 小时为基准，每提前 1 秒 +2 分，超时不扣分；排行榜中同难度通关者仍直接按实际用时排序。</small>
         </div>
         <div id="victoryHistorySlot"></div>
         <button class="primary-button" id="victoryRestartButton" type="button"><span>再次挑战</span><small>重新选择难度</small></button>
@@ -490,7 +495,7 @@
         <button class="modal-close" id="leaderboardClose" type="button" aria-label="关闭排行榜">×</button>
         <span class="briefing-kicker">本机战报 · LOCAL ARCHIVE</span>
         <h2 id="leaderboardTitle">排行榜</h2>
-        <p id="leaderboardDescription">默认显示总榜；不同难度会分别重新计算名次，记录仅保存在当前浏览器。</p>
+        <p id="leaderboardDescription">默认显示总榜；同难度通关 100 波时用时越短越靠前，记录仅保存在当前浏览器。</p>
         <div id="leaderboardHistorySlot"></div>
       </div>
     </div>
