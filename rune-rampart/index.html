@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#171913" />
-    <title>是男人就顶100波</title>
+    <title>符文守护</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23171913'/%3E%3Cpath d='M32 7 53 22 45 49 32 58 19 49 11 22Z' fill='%23d55237' stroke='%23f1ead6' stroke-width='4'/%3E%3Cpath d='M32 17v31M21 30h22' stroke='%23f1ead6' stroke-width='4'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="./styles.css" />
     <script type="text/javascript">
@@ -21,20 +21,20 @@
     <main class="game-shell" id="gameShell">
       <header class="topbar">
         <div class="brand-lockup">
-          <span class="chapter-mark">百波挑战</span>
+          <span class="chapter-mark">符文城防</span>
           <div>
-            <h1>是男人就顶100波</h1>
-            <p>Match-3 Rampart / 百波极限守城</p>
+            <h1>符文守护</h1>
+            <p>Match-3 Defense / 三消城防战</p>
           </div>
         </div>
 
         <div class="campaign-stats" aria-label="战局数据">
           <div class="stat-stamp difficulty-stamp" data-tooltip-key="difficulty">
             <span>难度</span>
-            <strong id="difficultyValue">新手</strong>
+            <strong id="difficultyValue">萌新</strong>
           </div>
           <div class="stat-stamp" data-tooltip-key="wave">
-            <span>波次 / 100</span>
+            <span id="waveLimitLabel">波次 / 100</span>
             <strong id="waveValue">001</strong>
           </div>
           <div class="stat-stamp" data-tooltip-key="kills">
@@ -142,7 +142,7 @@
         <section class="panel battle-panel" aria-labelledby="battleTitle">
           <div class="panel-heading battle-heading">
             <div>
-              <span class="eyebrow">百波战场 / 02</span>
+              <span class="eyebrow">符文战场 / 02</span>
               <h2 id="battleTitle">顶住这一波</h2>
             </div>
             <div class="wave-chip" data-tooltip-key="waveState"><span id="waveState">敌军 0 / 7</span><i></i></div>
@@ -277,28 +277,28 @@
     <div class="modal-backdrop is-open" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle" aria-describedby="introDescription">
       <div class="briefing-card campaign-briefing">
         <button class="modal-close" id="introClose" type="button" aria-label="关闭说明">×</button>
-        <span class="briefing-kicker">是男人就顶100波 · 战役配置</span>
-        <h2 id="introTitle">顶过十次跃迁，<br />站上第 100 波。</h2>
-        <p id="introDescription">每关都会变强，每 10 关敌潮跃升一级。持续消除并正确分配攻击、攻速与防御，才有机会登顶。</p>
+        <span class="briefing-kicker">符文守护 · 战役配置</span>
+        <h2 id="introTitle">调度符文，<br />守住每一波。</h2>
+        <p id="introDescription">敌军生命、攻击、防御与速度每波都会增强，每 10 波再跃升一个阶段。持续消除并正确分配攻击、攻速与防御，才能守得更久。</p>
         <p class="briefing-device-note"><b>设备建议</b> 电脑端体验最佳；使用手机时请切换到横屏。</p>
 
         <fieldset class="difficulty-picker">
           <legend>选择战役难度</legend>
           <div class="difficulty-options">
-            <button class="difficulty-card is-selected" type="button" data-difficulty="rookie" aria-pressed="true">
-              <span><b>新手</b><i>01</i></span>
-              <strong>每波约 4 组起 · 稳健通关</strong>
-              <small>高阶 20% 起 · 约 7 敌起 · 彩蛋较多</small>
-            </button>
-            <button class="difficulty-card" type="button" data-difficulty="veteran" aria-pressed="false">
-              <span><b>老兵</b><i>02</i></span>
+            <button class="difficulty-card is-selected" type="button" data-difficulty="veteran" aria-pressed="true">
+              <span><b>萌新</b><i>01</i></span>
               <strong>每波约 5 组起 · 胜负分水岭</strong>
               <small>高阶 45% 起 · 约 10 敌起 · 彩蛋偏少</small>
             </button>
             <button class="difficulty-card" type="button" data-difficulty="master" aria-pressed="false">
-              <span><b>大佬</b><i>03</i></span>
+              <span><b>大佬</b><i>02</i></span>
               <strong>每波约 6 组起 · 九死一生</strong>
               <small>高阶 64% 起 · 约 12 敌起 · 彩蛋极稀</small>
+            </button>
+            <button class="difficulty-card" type="button" data-difficulty="endless" aria-pressed="false">
+              <span><b>无限</b><i>∞</i></span>
+              <strong>第 99,999 波封顶 · 守到极限</strong>
+              <small>逐波增强 · 排名优先比较守完波数</small>
             </button>
           </div>
         </fieldset>
@@ -319,7 +319,7 @@
           <div><i class="coin">●</i><span><b>补强</b>每组消除均推进；长连和铸币组额外增加</span></div>
         </div>
         <p class="briefing-music-note"><b>♫ 20 首 MIDI 军乐</b><span>科罗贝尼基 · 欢乐颂 · 四季 · 传统民谣 · 原创战曲 / 自动循环，可随时切歌</span></p>
-        <button class="primary-button" id="startButton" type="button"><span>以「新手」出征</span><small>开始百波挑战</small></button>
+        <button class="primary-button" id="startButton" type="button"><span>以「萌新」出征</span><small>开始 100 波战役</small></button>
         <p class="briefing-note">战役中可从右上角重新打开此界面；确认出征将重开游戏。</p>
       </div>
     </div>
@@ -330,7 +330,7 @@
         <h2 id="resumeTitle">烽火尚未熄灭。</h2>
         <p id="resumeDescription">浏览器中保存着一场未结束的战役。你可以回到保存位置，也可以归档旧战报并重新部署。</p>
         <div class="resume-summary" aria-label="已保存战役信息">
-          <div><span>难度</span><strong id="resumeDifficulty">新手</strong></div>
+          <div><span>难度</span><strong id="resumeDifficulty">萌新</strong></div>
           <div><span>波次</span><strong id="resumeWave">001 / 100</strong></div>
           <div><span>城墙</span><strong id="resumeWall">1120 / 1120</strong></div>
           <div><span>军功</span><strong id="resumeScore">00000</strong></div>
@@ -396,9 +396,9 @@
           <section class="rule-section difficulty-rule">
             <h3><i aria-hidden="true">♛</i> 难度与排名</h3>
             <ul>
-              <li>新手适合熟悉规则；老兵约有一半玩家难以通关；大佬面向极限挑战。</li>
-              <li>更高难度会提高敌军数量、速度与高阶怪密度，同时降低彩蛋出现率。</li>
-              <li>结算榜按难度优先；同难度均通关 100 波时，用时越短排名越前。</li>
+              <li>萌新与大佬的通关上限为 100 波；无限难度的配置上限为 99,999 波。</li>
+              <li>敌军生命、攻击、防御与速度每一波都会增强，每 10 波还会提高敌军规模与首领压力。</li>
+              <li>无限榜优先比较守完波数；萌新与大佬同难度通关 100 波时，用时越短排名越前。</li>
               <li>通关速通奖励以 2 小时为基准，每提前 1 秒获得 2 分，超时不扣分。</li>
               <li>未通关战报再比较波次、总分、歼敌与消除成绩。</li>
             </ul>
@@ -428,7 +428,7 @@
           <div class="settlement-rank-stamp"><span>本局排名</span><strong id="finalRank">#01</strong></div>
         </div>
         <div class="final-stats settlement-stats">
-          <div><span>难度</span><strong id="finalDifficulty">新手</strong></div>
+          <div><span>难度</span><strong id="finalDifficulty">萌新</strong></div>
           <div><span>守完波次</span><strong id="finalWave">0 / 100</strong></div>
           <div><span>歼灭敌军</span><strong id="finalKills">0</strong></div>
           <div><span>消除组数</span><strong id="finalMatches">0</strong></div>
@@ -438,7 +438,7 @@
         <div class="score-ledger">
           <span>结算分构成</span>
           <strong id="finalScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
-          <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；历史榜先按大佬、老兵、新手分层，同难度通关者优先按用时从短到长排列，未通关者再比较波次、总分、歼敌与消除。</small>
+          <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；无限榜优先比较守完波数，萌新与大佬同难度通关者优先按用时排列，未通关者再比较波次、总分、歼敌与消除。</small>
         </div>
         <div id="failureHistorySlot">
           <section class="history-board" id="historyBoard" aria-labelledby="historyTitle">
@@ -446,9 +446,9 @@
               <div><h3 id="historyTitle">本机历史战绩</h3><span id="historyCount">0 条战报</span></div>
               <div class="history-filters" role="group" aria-label="按难度查看历史排名">
                 <button class="is-active" type="button" data-history-filter="all" aria-pressed="true">总榜</button>
+                <button type="button" data-history-filter="endless" aria-pressed="false">无限</button>
                 <button type="button" data-history-filter="master" aria-pressed="false">大佬</button>
-                <button type="button" data-history-filter="veteran" aria-pressed="false">老兵</button>
-                <button type="button" data-history-filter="rookie" aria-pressed="false">新手</button>
+                <button type="button" data-history-filter="veteran" aria-pressed="false">萌新</button>
               </div>
             </div>
             <div class="history-table-wrap">
@@ -467,14 +467,14 @@
       <div class="briefing-card victory-card">
         <div class="settlement-heading">
           <div>
-            <span class="briefing-kicker">第 100 波肃清 · 百波登顶</span>
+            <span class="briefing-kicker" id="victoryKicker">第 100 波肃清 · 战役登顶</span>
             <h2 id="victoryTitle">你真的顶住了整整 100 波。</h2>
           </div>
           <div class="settlement-rank-stamp victory-rank-stamp"><span>总榜名次</span><strong id="victoryRank">#01</strong></div>
         </div>
         <div class="final-stats settlement-stats victory-stats">
-          <div><span>难度</span><strong id="victoryDifficulty">新手</strong></div>
-          <div><span>最终波次</span><strong>100 / 100</strong></div>
+          <div><span>难度</span><strong id="victoryDifficulty">萌新</strong></div>
+          <div><span>最终波次</span><strong id="victoryWave">100 / 100</strong></div>
           <div><span>歼灭敌军</span><strong id="victoryKills">0</strong></div>
           <div><span>消除组数</span><strong id="victoryMatches">0</strong></div>
           <div><span>有效时长</span><strong id="victoryTime">00:00</strong></div>
@@ -495,7 +495,7 @@
         <button class="modal-close" id="leaderboardClose" type="button" aria-label="关闭排行榜">×</button>
         <span class="briefing-kicker">本机战报 · LOCAL ARCHIVE</span>
         <h2 id="leaderboardTitle">排行榜</h2>
-        <p id="leaderboardDescription">默认显示总榜；同难度通关 100 波时用时越短越靠前，记录仅保存在当前浏览器。</p>
+        <p id="leaderboardDescription">默认显示总榜；无限榜优先比较守完波数，萌新与大佬通关 100 波后比较用时。记录仅保存在当前浏览器。</p>
         <div id="leaderboardHistorySlot"></div>
       </div>
     </div>
@@ -506,6 +506,7 @@
       <span id="contextTooltipBody">将鼠标移到战场模块上查看规则与当前状态。</span>
     </div>
 
+    <script src="./game-config.js"></script>
     <script src="./game.js"></script>
   </body>
 </html>

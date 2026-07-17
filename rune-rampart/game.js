@@ -1,9 +1,11 @@
 (() => {
   'use strict';
 
+  const GAME_CONFIG = window.RUNE_GUARD_CONFIG;
+  if (!GAME_CONFIG?.difficulties) throw new Error('Missing Rune Guard game configuration');
   const ROWS = 7;
   const COLS = 7;
-  const MAX_WAVES = 100;
+  const DEFAULT_DIFFICULTY = GAME_CONFIG.defaultDifficulty;
   const SECONDARY_BOLT_POWER = .45;
   const EMBER_BASE_CAP = 24;
   const EMBER_CAP_PER_WEAPON_LEVEL = 4;
@@ -34,7 +36,7 @@
   };
   const HISTORY_LIMIT = 30;
   const HISTORY_VISIBLE_LIMIT = 8;
-  const DIFFICULTY_PRIORITY = { rookie: 1, veteran: 2, master: 3 };
+  const DIFFICULTY_PRIORITY = { veteran: 1, master: 2, endless: 3 };
   const TYPES = ['ember', 'mana', 'moss', 'coin'];
   const SYMBOLS = { ember: '◆', mana: '✦', moss: '⬟', coin: '●' };
   const TYPE_NAMES = { ember: '红曜石', mana: '蓝晶', moss: '绿晶', coin: '铸币' };
@@ -50,23 +52,7 @@
     brute: ['铁颚·巴图', '碎墙·葛恩', '铜背·沃尔', '独眼·赫山', '重槌·鲁格'],
     boss: ['焚城者·戈摩', '不屈巨兽·塔恩', '王旗终结者·穆拉']
   };
-  const DIFFICULTIES = {
-    rookie: {
-      name: '新手', subtitle: '稳健通关', pressure: .82, eliteOffset: -.28, eliteCap: .72,
-      statScale: .8, durabilityScale: 1.1, speedFactor: .94, groupScale: .62, batchDivisor: 7,
-      relicChance: .2, relicGrowth: .004, runeRelicChance: .06, scoreScale: 1
-    },
-    veteran: {
-      name: '老兵', subtitle: '胜负分水岭', pressure: 1.1, eliteOffset: -.03, eliteCap: .93,
-      statScale: 1.08, durabilityScale: 1.35, speedFactor: 1.12, groupScale: .9, batchDivisor: 4,
-      relicChance: .07, relicGrowth: .0025, runeRelicChance: .02, scoreScale: 1.5
-    },
-    master: {
-      name: '大佬', subtitle: '九死一生', pressure: 1.38, eliteOffset: .16, eliteCap: .99,
-      statScale: 1.28, durabilityScale: 1.55, speedFactor: 1.28, groupScale: 1.12, batchDivisor: 2,
-      relicChance: .02, relicGrowth: .001, runeRelicChance: .006, scoreScale: 2
-    }
-  };
+  const DIFFICULTIES = GAME_CONFIG.difficulties;
   const BASE_ENEMY_STATS = {
     raider: { hp: 100, speed: 3, damage: 28, defense: 3, role: '荒原劫掠者 · 均衡型', roleIcon: '◆' },
     swift: { hp: 70, speed: 5.4, damage: 18, defense: 1, role: '影袭斥候 · 速度型', roleIcon: '»' },
@@ -109,7 +95,7 @@
       harmony: [67, null, 67, null, 71, null, 67, null, 64, null, 64, null, 67, null, 62, null, 60, null, 60, null, 64, null, 60, null, 57, null, 59, null, 62, null, 64, null]
     },
     {
-      title: '城垣余火 · 原创战曲', source: 'Rune Rampart 原创', bpm: 104, cycles: 3,
+      title: '城垣余火 · 原创战曲', source: '符文守护原创', bpm: 104, cycles: 3,
       melody: [74, null, 77, 76, 74, null, 72, 69, 70, null, 74, 72, 69, null, 67, 65, 69, null, 72, 74, 77, null, 76, 72, 74, null, 72, 69, 67, null, 69, 72],
       bass: [38, null, null, null, 38, null, 45, null, 41, null, null, null, 36, null, 43, null, 38, null, null, null, 34, null, 41, null, 36, null, null, null, 33, null, 36, null],
       harmony: [62, null, null, null, null, null, 60, null, 58, null, null, null, 57, null, 55, null, 57, null, null, null, 62, null, 60, null, 58, null, null, null, 55, null, 57, null]
@@ -501,7 +487,7 @@
     board: [], boardRelics: [], selected: null, locked: false, started: false, paused: true, gameOver: false,
     score: 0, kills: 0, wave: 1, emberCharges: 0, mana: 0, shield: 0, repaired: 0,
     forge: 0, forgeTarget: FORGE_START, equipment: { weapon: 1, armor: 1, charm: 1 },
-    upgradeMode: 'auto', autoUpgradeIndex: 0, selectedDifficulty: 'rookie', difficulty: 'rookie',
+    upgradeMode: 'auto', autoUpgradeIndex: 0, selectedDifficulty: DEFAULT_DIFFICULTY, difficulty: DEFAULT_DIFFICULTY,
     wall: 1120, wallMax: 1120, combo: 1, enemies: [], enemyId: 0,
     waveQueue: 0, waveTotal: 0, waveSpawned: 0, waveBossesRemaining: 0,
     waveMatches: 0, totalMatches: 0, waveProfile: null, nextSpawnAt: 0, intermissionUntil: 0,
@@ -527,7 +513,7 @@
 
   function contextTooltipModel(target) {
     const key = target.dataset.tooltipKey;
-    const difficulty = DIFFICULTIES[state.difficulty] || DIFFICULTIES.rookie;
+    const difficulty = difficultyConfig();
     const profile = state.waveProfile || getWaveProfile(state.wave, state.difficulty);
     const enemy = tooltipTargetEnemy();
     const upgradeSlot = currentUpgradeSlot();
@@ -538,10 +524,10 @@
         title: '战役选项',
         body: state.started
           ? `当前为「${difficulty.name}」难度。打开后会立即暂停并保存；确认出征才会清除本局并重开。`
-          : '选择新手、老兵或大佬难度，再开始一场新的百波战役。'
+          : '选择萌新、大佬或无限难度；无限难度以第 99,999 波作为配置终点。'
       },
       rules: { title: '完整规则', body: '集中查看消除、补强、战斗、彩蛋、难度、排名与存档规则；打开时会暂停并保存。' },
-      leaderboard: { title: `本机排行榜 · ${settlementHistory.length} 条`, body: '打开总榜或按新手、老兵、大佬难度查看历史战绩；游戏中打开会立即暂停并保存，关闭后恢复。' },
+      leaderboard: { title: `本机排行榜 · ${settlementHistory.length} 条`, body: '打开总榜或按萌新、大佬、无限难度查看历史战绩；无限榜优先比较守完波数。' },
       fullscreen: { title: document.fullscreenElement ? '退出全屏' : '进入全屏', body: '切换显示模式，不会改变战局进度或暂停状态。' },
       sound: { title: sound.muted ? '音效已关闭' : '音效已开启', body: `点击${sound.muted ? '开启' : '关闭'}射击、命中、消除与升级音效；MIDI 军乐单独控制。` },
       pause: {
@@ -552,7 +538,7 @@
         title: `难度 · ${difficulty.name}`,
         body: `${difficulty.subtitle} · 军功倍率 ×${difficulty.scoreScale}。本波 ${profile.enemyCount} 敌，高阶怪约 ${Math.round(profile.advancedChance * 100)}%。`
       },
-      wave: { title: `第 ${state.wave} / ${MAX_WAVES} 波`, body: `当前为第 ${profile.stage} 阶段${profile.isBossWave ? ' Boss 波' : ''}；每 10 波敌潮会发生一次跃升。` },
+      wave: { title: `第 ${formatWaveProgress(state.wave)} 波`, body: `当前为第 ${profile.stage} 阶段${profile.isBossWave ? ' Boss 波' : ''}；敌军属性每波增强，每 10 波再发生一次跃升。` },
       kills: { title: `本局歼敌 ${state.kills}`, body: '成功击败才计入歼敌；抵达城墙并自爆的敌人不会计入。' },
       score: { title: `当前军功 ${state.score.toLocaleString('zh-CN')}`, body: '击杀、波次与难度会影响军功；失败结算还会加入守完波次和有效交战时长。' },
       wall: { title: `城墙 ${Math.max(0, Math.ceil(state.wall))} / ${state.wallMax} · 护盾 ${Math.ceil(state.shield)} / ${shieldCapacity()}`, body: `敌人伤害先经过城防减伤 ${wallDefense()}%，再优先消耗护盾；护盾耗尽后才扣除耐久。` },
@@ -716,6 +702,38 @@
     return Number.isFinite(numeric) ? clamp(numeric, minimum, maximum) : fallback;
   };
 
+  function normalizeDifficultyKey(key) {
+    const migratedKey = key === 'rookie' ? DEFAULT_DIFFICULTY : key;
+    return DIFFICULTIES[migratedKey] ? migratedKey : DEFAULT_DIFFICULTY;
+  }
+
+  function difficultyConfig(key = state.difficulty) {
+    return DIFFICULTIES[normalizeDifficultyKey(key)];
+  }
+
+  function waveLimitForDifficulty(key = state.difficulty) {
+    return difficultyConfig(key).waveLimit;
+  }
+
+  function isEndlessDifficulty(key = state.difficulty) {
+    return Boolean(difficultyConfig(key).endless);
+  }
+
+  function normalizeWave(value, difficultyKey = state.difficulty, fallback = 1) {
+    const numeric = Number(value);
+    const wave = Number.isFinite(numeric) ? Math.floor(numeric) : fallback;
+    return clamp(wave, 1, waveLimitForDifficulty(difficultyKey));
+  }
+
+  function waveLimitLabel(difficultyKey = state.difficulty) {
+    return isEndlessDifficulty(difficultyKey) ? '∞' : String(waveLimitForDifficulty(difficultyKey));
+  }
+
+  function formatWaveProgress(wave, difficultyKey = state.difficulty, pad = false) {
+    const current = pad ? String(wave).padStart(3, '0') : String(wave);
+    return `${current} / ${waveLimitLabel(difficultyKey)}`;
+  }
+
   function currentActivePlayMs(now = performance.now()) {
     const currentSegment = state.started && !state.paused && !state.gameOver && state.playSegmentStartedAt
       ? Math.max(0, now - state.playSegmentStartedAt)
@@ -746,18 +764,21 @@
   }
 
   function normalizeHistoryRecord(record, index = 0) {
-    if (!record || !DIFFICULTIES[record.difficulty]) return null;
+    if (!record) return null;
+    const difficulty = record.difficulty === 'rookie' ? DEFAULT_DIFFICULTY : record.difficulty;
+    if (!DIFFICULTIES[difficulty]) return null;
+    const config = difficultyConfig(difficulty);
     const achievedAt = Math.floor(safeNumber(record.achievedAt, Date.now(), 1));
-    const activePlayMs = Math.floor(safeNumber(record.activePlayMs, 0, 0, 1000 * 60 * 60 * 48));
-    const clearedWaves = Math.floor(safeNumber(record.clearedWaves, 0, 0, MAX_WAVES));
-    const victory = Boolean(record.victory) || clearedWaves >= MAX_WAVES;
+    const activePlayMs = Math.floor(safeNumber(record.activePlayMs, 0, 0, 1000 * 60 * 60 * 24 * 365));
+    const clearedWaves = Math.floor(safeNumber(record.clearedWaves, 0, 0, config.waveLimit));
+    const victory = Boolean(record.victory) || clearedWaves >= config.waveLimit;
     const baseScore = Math.floor(safeNumber(record.baseScore, record.score, 0, 1000000000));
     const waveScore = Math.floor(safeNumber(record.waveScore, clearedWaves * 1500, 0, 1000000000));
     const timeScore = Math.floor(safeNumber(record.timeScore, settlementTimeScore(activePlayMs, victory), 0, 1000000000));
     return {
       id: String(record.id || `${achievedAt}-${index}`),
       achievedAt,
-      difficulty: record.difficulty,
+      difficulty,
       victory,
       clearedWaves,
       activePlayMs,
@@ -775,7 +796,7 @@
     return [...records].sort((first, second) => (
       DIFFICULTY_PRIORITY[second.difficulty] - DIFFICULTY_PRIORITY[first.difficulty]
       || second.clearedWaves - first.clearedWaves
-      || (first.clearedWaves >= MAX_WAVES && second.clearedWaves >= MAX_WAVES ? first.activePlayMs - second.activePlayMs : 0)
+      || (first.victory && second.victory ? first.activePlayMs - second.activePlayMs : 0)
       || second.settlementScore - first.settlementScore
       || second.kills - first.kills
       || second.totalMatches - first.totalMatches
@@ -801,7 +822,7 @@
 
   function createSettlementRecord(victory = false) {
     const activePlayMs = Math.floor(currentActivePlayMs());
-    const clearedWaves = victory ? MAX_WAVES : Math.max(0, state.wave - 1);
+    const clearedWaves = victory ? waveLimitForDifficulty() : Math.max(0, state.wave - 1);
     const waveScore = clearedWaves * 1500;
     const timeScore = settlementTimeScore(activePlayMs, victory);
     const achievedAt = Date.now();
@@ -892,7 +913,7 @@
     if (!result) return;
     const { record, history, rank } = result;
     $('#finalDifficulty').textContent = DIFFICULTIES[record.difficulty].name;
-    $('#finalWave').textContent = `${record.clearedWaves} / ${MAX_WAVES}`;
+    $('#finalWave').textContent = formatWaveProgress(record.clearedWaves, record.difficulty);
     $('#finalKills').textContent = record.kills;
     $('#finalMatches').textContent = record.totalMatches;
     $('#finalTime').textContent = formatBattleTime(record.activePlayMs);
@@ -910,6 +931,11 @@
     if (!result) return;
     const { record, history, rank } = result;
     $('#victoryDifficulty').textContent = DIFFICULTIES[record.difficulty].name;
+    $('#victoryKicker').textContent = `第 ${record.clearedWaves.toLocaleString('zh-CN')} 波肃清 · 战役登顶`;
+    $('#victoryTitle').textContent = isEndlessDifficulty(record.difficulty)
+      ? '你守到了无限战役的配置终点。'
+      : `你真的顶住了整整 ${record.clearedWaves} 波。`;
+    $('#victoryWave').textContent = `${record.clearedWaves.toLocaleString('zh-CN')} / ${record.clearedWaves.toLocaleString('zh-CN')}`;
     $('#victoryKills').textContent = record.kills;
     $('#victoryMatches').textContent = record.totalMatches;
     $('#victoryTime').textContent = formatBattleTime(record.activePlayMs);
@@ -937,8 +963,9 @@
         && save.board.every((type) => TYPES.includes(type));
       const validRelics = Array.isArray(save.boardRelics) && save.boardRelics.length === ROWS * COLS
         && save.boardRelics.every((type) => type === null || Boolean(RELICS[type]));
-      if (save.version !== SAVE_VERSION || !DIFFICULTIES[save.difficulty] || !validBoard || !validRelics) throw new Error('Invalid checkpoint');
-      return save;
+      const migratedDifficulty = save.difficulty === 'rookie' ? DEFAULT_DIFFICULTY : save.difficulty;
+      if (save.version !== SAVE_VERSION || !DIFFICULTIES[migratedDifficulty] || !validBoard || !validRelics) throw new Error('Invalid checkpoint');
+      return { ...save, difficulty: migratedDifficulty, selectedDifficulty: normalizeDifficultyKey(save.selectedDifficulty || migratedDifficulty) };
     } catch (error) {
       clearSavedProgress();
       return null;
@@ -1076,10 +1103,11 @@
 
   function showResumePrompt(save) {
     pendingResume = save;
-    const difficulty = DIFFICULTIES[save.difficulty] || DIFFICULTIES.rookie;
-    const wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
+    const difficultyKey = normalizeDifficultyKey(save.difficulty);
+    const difficulty = difficultyConfig(difficultyKey);
+    const wave = normalizeWave(save.wave, difficultyKey);
     $('#resumeDifficulty').textContent = difficulty.name;
-    $('#resumeWave').textContent = `${String(wave).padStart(3, '0')} / ${MAX_WAVES}`;
+    $('#resumeWave').textContent = formatWaveProgress(wave, difficultyKey, true);
     $('#resumeWall').textContent = `${Math.ceil(safeNumber(save.wall, 0, 0))} / ${Math.ceil(safeNumber(save.wallMax, 1120, 1))}`;
     $('#resumeScore').textContent = String(Math.floor(safeNumber(save.score, 0, 0))).padStart(5, '0');
     $('#resumeSavedAt').textContent = new Date(safeNumber(save.savedAt, Date.now())).toLocaleString('zh-CN', {
@@ -1152,13 +1180,13 @@
     state.leaderboardWasPaused = false;
     state.pendingSaveReason = null;
     state.settlementRecorded = false;
-    state.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'rookie';
+    state.difficulty = normalizeDifficultyKey(save.difficulty);
     state.selectedDifficulty = state.difficulty;
     state.board = [...save.board];
     state.boardRelics = [...save.boardRelics];
     state.score = Math.floor(safeNumber(save.score, 0, 0));
     state.kills = Math.floor(safeNumber(save.kills, 0, 0));
-    state.wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
+    state.wave = normalizeWave(save.wave, state.difficulty);
     state.emberCharges = Math.floor(safeNumber(save.emberCharges, 0, 0, 1000000));
     state.mana = Math.floor(safeNumber(save.mana, 0, 0, 1000000));
     state.shield = 0;
@@ -1239,12 +1267,21 @@
   }
 
   function getWaveProfile(wave, difficultyKey = state.difficulty) {
-    const safeWave = clamp(Math.floor(Number(wave) || 1), 1, MAX_WAVES);
-    const difficulty = DIFFICULTIES[difficultyKey] || DIFFICULTIES.rookie;
+    const normalizedDifficulty = normalizeDifficultyKey(difficultyKey);
+    const difficulty = difficultyConfig(normalizedDifficulty);
+    const safeWave = normalizeWave(wave, normalizedDifficulty);
     const tier = Math.floor((safeWave - 1) / 10);
-    const baseGroups = 5 + Math.floor((safeWave - 1) * .065) + tier;
-    const baseCount = 9 + Math.floor((safeWave - 1) * .32) + tier * 2;
-    const isBossWave = safeWave % 10 === 0;
+    // Infinite mode keeps battlefield density bounded for browser performance;
+    // enemy HP, damage, defense and speed still rise on every single wave.
+    const densityWave = difficulty.endless ? Math.min(safeWave, 240) : safeWave;
+    const densityTier = Math.floor((densityWave - 1) / 10);
+    const baseGroups = 5 + Math.floor((densityWave - 1) * .065) + densityTier;
+    const baseCount = 9 + Math.floor((densityWave - 1) * .32) + densityTier * 2;
+    const isBossWave = safeWave % 10 === 0 || safeWave === difficulty.waveLimit;
+    const hpScale = (1 + (safeWave - 1) * .035) * (1 + tier * .08) * difficulty.statScale * difficulty.durabilityScale;
+    const damageScale = (1 + (safeWave - 1) * .018) * (1 + tier * .07) * difficulty.statScale;
+    const defenseScale = (1 + (safeWave - 1) * .018) * (1 + tier * .06) * difficulty.statScale;
+    const speedScale = (1 + (safeWave - 1) * .0015 + tier * .015) * difficulty.speedFactor;
     return {
       wave: safeWave,
       tier,
@@ -1252,14 +1289,17 @@
       requiredGroups: Math.max(3, Math.ceil(baseGroups * difficulty.groupScale)),
       enemyCount: Math.max(7, Math.round(baseCount * difficulty.pressure)),
       advancedChance: clamp(.48 + (safeWave - 1) * .0025 + tier * .035 + difficulty.eliteOffset, .18, difficulty.eliteCap),
-      hpScale: (1 + (safeWave - 1) * .035) * (1 + tier * .08) * difficulty.statScale * difficulty.durabilityScale,
+      hpScale,
       // Breach damage grows more slowly than durability so a few leaks hurt
       // without making late waves collapse the wall in two or three hits.
-      damageScale: (1 + (safeWave - 1) * .018) * (1 + tier * .07) * difficulty.statScale,
-      defenseScale: (1 + (safeWave - 1) * .018) * (1 + tier * .06) * difficulty.statScale,
-      speedScale: (1 + (safeWave - 1) * .0015 + tier * .015) * difficulty.speedFactor,
-      batchSize: 1 + Math.floor(tier / difficulty.batchDivisor),
-      bossCount: isBossWave ? (safeWave === MAX_WAVES ? 3 : 1 + Math.floor(tier / 5)) : 0,
+      damageScale,
+      defenseScale,
+      speedScale,
+      intensity: hpScale * damageScale * defenseScale * speedScale,
+      batchSize: difficulty.endless
+        ? Math.min(8, 1 + Math.floor(tier / difficulty.batchDivisor))
+        : 1 + Math.floor(tier / difficulty.batchDivisor),
+      bossCount: isBossWave ? (safeWave === difficulty.waveLimit ? 3 : Math.min(5, 1 + Math.floor(tier / 5))) : 0,
       isBossWave,
       relicChance: clamp(difficulty.relicChance + tier * difficulty.relicGrowth, difficulty.relicChance, difficulty.relicChance + difficulty.relicGrowth * 10),
       runeRelicChance: difficulty.runeRelicChance,
@@ -1315,8 +1355,9 @@
     let autoUpgradeIndex = 0;
     let firstFailure = null;
     let minimumMargin = Infinity;
+    const calibrationWaveLimit = DIFFICULTIES.master.waveLimit;
 
-    for (let wave = 1; wave <= MAX_WAVES; wave += 1) {
+    for (let wave = 1; wave <= Math.min(calibrationWaveLimit, waveLimitForDifficulty(difficultyKey)); wave += 1) {
       const profile = getWaveProfile(wave, difficultyKey);
       forge += profile.requiredGroups * 1.35 * efficiency;
       while (true) {
@@ -1907,7 +1948,7 @@
     };
   }
 
-  function breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
+  function breachDamageProfile(type = 'raider', wave = 1, difficulty = DEFAULT_DIFFICULTY, armorLevel = 1) {
     const stats = BASE_ENEMY_STATS[type] || BASE_ENEMY_STATS.raider;
     const profile = getWaveProfile(wave, difficulty);
     const safeArmorLevel = Math.max(1, Math.floor(Number(armorLevel) || 1));
@@ -1992,10 +2033,11 @@
   }
 
   function updateUI() {
-    const difficulty = DIFFICULTIES[state.difficulty];
+    const difficulty = difficultyConfig();
     const profile = state.waveProfile || getWaveProfile(state.wave, state.difficulty);
     $('#difficultyValue').textContent = difficulty.name;
     $('#waveValue').textContent = String(state.wave).padStart(3, '0');
+    $('#waveLimitLabel').textContent = `波次 / ${waveLimitLabel()}`;
     $('#killValue').textContent = String(state.kills).padStart(3, '0');
     $('#scoreValue').textContent = String(state.score).padStart(5, '0');
     $('#emberValue').textContent = `${state.emberCharges} / ${emberCapacity()}`;
@@ -2071,7 +2113,7 @@
   }
 
   function startWave(wave) {
-    state.wave = clamp(wave, 1, MAX_WAVES);
+    state.wave = normalizeWave(wave, state.difficulty);
     const profile = getWaveProfile(state.wave, state.difficulty);
     state.waveProfile = profile;
     state.waveTotal = profile.enemyCount;
@@ -2085,7 +2127,7 @@
       ? `${profile.bossCount} 头 Boss 级攻城兽正在逼近`
       : `第 ${state.wave} 波敌军正在逼近`;
     const announcement = els.waveAnnouncement;
-    announcement.querySelector('span').textContent = `WAVE ${String(state.wave).padStart(3, '0')} / ${MAX_WAVES}`;
+    announcement.querySelector('span').textContent = `WAVE ${formatWaveProgress(state.wave, state.difficulty, true)}`;
     announcement.querySelector('strong').textContent = profile.isBossWave ? '十波首领战' : state.wave < 3 ? '斥候来袭' : '敌潮升级';
     announcement.classList.remove('is-visible');
     void announcement.offsetWidth;
@@ -2445,7 +2487,7 @@
       }
       if (state.waveQueue === 0 && state.enemies.length === 0) {
         if (!state.intermissionUntil) {
-          if (state.wave >= MAX_WAVES) {
+          if (state.wave >= waveLimitForDifficulty()) {
             completeVictory();
             return;
           }
@@ -2633,18 +2675,19 @@
   }
 
   function selectDifficulty(key, announce = true) {
-    if (!DIFFICULTIES[key]) return;
-    state.selectedDifficulty = key;
-    writeStorage(STORAGE_KEYS.difficulty, key);
+    const normalizedKey = normalizeDifficultyKey(key);
+    if (!DIFFICULTIES[normalizedKey]) return;
+    state.selectedDifficulty = normalizedKey;
+    writeStorage(STORAGE_KEYS.difficulty, normalizedKey);
     document.querySelectorAll('.difficulty-card').forEach((button) => {
-      const active = button.dataset.difficulty === key;
+      const active = button.dataset.difficulty === normalizedKey;
       button.classList.toggle('is-selected', active);
       button.setAttribute('aria-pressed', String(active));
     });
-    const config = DIFFICULTIES[key];
+    const config = DIFFICULTIES[normalizedKey];
     $('#startButton span').textContent = `以「${config.name}」出征`;
     $('#startButton small').textContent = state.started ? '确认后重开战局' : `部署 · ${config.subtitle}`;
-    if (announce) sound.play('click', .12, key === 'master' ? .86 : key === 'veteran' ? 1 : 1.12);
+    if (announce) sound.play('click', .12, normalizedKey === 'master' ? .86 : normalizedKey === 'endless' ? .76 : 1.08);
   }
 
   function openCampaignOptions() {
@@ -2831,7 +2874,7 @@
         state.pausedAt = 0;
         state.settlementRecorded = false;
         state.difficulty = DIFFICULTIES[values.difficulty] ? values.difficulty : state.difficulty;
-        state.wave = Math.floor(safeNumber(values.wave, state.wave, 1, MAX_WAVES));
+        state.wave = normalizeWave(values.wave, state.difficulty, state.wave);
         state.score = Math.floor(safeNumber(values.score, state.score, 0));
         state.kills = Math.floor(safeNumber(values.kills, state.kills, 0));
         state.totalMatches = Math.floor(safeNumber(values.totalMatches, state.totalMatches, 0));
@@ -2960,7 +3003,10 @@
       waveProfile(wave, difficulty = 'master') {
         return getWaveProfile(wave, difficulty);
       },
-      breachDamageProfile(type = 'raider', wave = 1, difficulty = 'rookie', armorLevel = 1) {
+      difficultySettings(difficulty = state.difficulty) {
+        return { ...difficultyConfig(difficulty) };
+      },
+      breachDamageProfile(type = 'raider', wave = 1, difficulty = DEFAULT_DIFFICULTY, armorLevel = 1) {
         return breachDamageProfile(type, wave, difficulty, armorLevel);
       },
       simulateBalance(difficulty = 'master', efficiency = 1) {
@@ -2983,7 +3029,7 @@
         const volley = fireAt(target, performance.now());
         return { volleySize: volleySize(), attackRate: attackRate(), ...volley, emberCharges: state.emberCharges };
       },
-      clearWave(wave = MAX_WAVES) {
+      clearWave(wave = waveLimitForDifficulty()) {
         startWave(wave);
         state.waveQueue = 0;
         state.waveBossesRemaining = 0;
@@ -3005,6 +3051,8 @@
           upgradeMode: state.upgradeMode,
           upgradeTargetSlot: currentUpgradeSlot(),
           wave: state.wave,
+          waveLimit: waveLimitForDifficulty(),
+          endless: isEndlessDifficulty(),
           intermissionRemaining: state.intermissionUntil ? Math.max(0, state.intermissionUntil - performance.now()) : 0,
           score: state.score,
           kills: state.kills,
@@ -3033,8 +3081,8 @@
     };
   }
 
-  const storedDifficulty = readStorage(STORAGE_KEYS.difficulty, 'rookie');
-  const initialDifficulty = DIFFICULTIES[storedDifficulty] ? storedDifficulty : 'rookie';
+  const storedDifficulty = readStorage(STORAGE_KEYS.difficulty, DEFAULT_DIFFICULTY);
+  const initialDifficulty = normalizeDifficultyKey(storedDifficulty);
   state.selectedDifficulty = initialDifficulty;
   state.difficulty = initialDifficulty;
   settlementHistory = readHistory();

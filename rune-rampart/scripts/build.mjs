@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const outputDirectory = join(projectRoot, 'dist');
-const publicEntries = ['index.html', 'styles.css', 'game.js', 'assets'];
+const publicEntries = ['index.html', 'styles.css', 'game-config.js', 'game.js', 'assets'];
 
 await rm(outputDirectory, { recursive: true, force: true });
 await mkdir(outputDirectory, { recursive: true });

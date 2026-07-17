@@ -103,15 +103,38 @@ let activeBrowser;
   });
 
   await page.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
-  if (await page.title() !== '是男人就顶100波') throw new Error('Unexpected page title');
+  if (await page.title() !== '符文守护') throw new Error('Unexpected page title');
   if (!await page.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Briefing modal is not open');
   if (await page.locator('.difficulty-card').count() !== 3) throw new Error('Difficulty picker does not have three levels');
   const difficultyNames = await page.locator('.difficulty-card span b').allInnerTexts();
-  if (difficultyNames.join('/') !== '新手/老兵/大佬') throw new Error(`Unexpected difficulty names: ${difficultyNames.join('/')}`);
+  if (difficultyNames.join('/') !== '萌新/大佬/无限') throw new Error(`Unexpected difficulty names: ${difficultyNames.join('/')}`);
+  if (!await page.locator('[data-difficulty="veteran"]').evaluate((node) => node.classList.contains('is-selected'))) throw new Error('Rookie replacement is not selected by default');
+  const configuredWaveLimits = await page.evaluate(() => ({
+    veteran: window.__runeRampartTest.difficultySettings('veteran').waveLimit,
+    master: window.__runeRampartTest.difficultySettings('master').waveLimit,
+    endless: window.__runeRampartTest.difficultySettings('endless').waveLimit
+  }));
+  if (configuredWaveLimits.veteran !== 100 || configuredWaveLimits.master !== 100 || configuredWaveLimits.endless !== 99999) throw new Error(`Difficulty wave limits are not configuration-driven: ${JSON.stringify(configuredWaveLimits)}`);
   if (!await page.locator('.briefing-device-note').innerText().then((text) => text.includes('电脑端体验最佳') && text.includes('横屏'))) throw new Error('Welcome screen does not explain the recommended device orientation');
   if (!await page.locator('.briefing-music-note').innerText().then((text) => text.includes('科罗贝尼基') && text.includes('自动循环'))) throw new Error('Welcome screen does not explain the MIDI playlist');
   await assertMinimumFont(page, 'Desktop welcome');
   await page.screenshot({ path: path.join(output, 'welcome.png'), fullPage: false });
+  await page.locator('[data-difficulty="endless"]').click();
+  await page.locator('#startButton').click();
+  await page.waitForTimeout(700);
+  await page.evaluate(() => window.__runeRampartTest.clearWave(100));
+  await page.waitForTimeout(150);
+  const endlessAtHundred = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    waveLabel: document.querySelector('#waveLimitLabel').textContent,
+    victoryOpen: document.querySelector('#victoryModal').classList.contains('is-open')
+  }));
+  if (endlessAtHundred.snapshot.wave !== 100 || endlessAtHundred.snapshot.waveLimit !== 99999 || !endlessAtHundred.snapshot.endless || endlessAtHundred.snapshot.gameOver || endlessAtHundred.victoryOpen || endlessAtHundred.waveLabel !== '波次 / ∞' || endlessAtHundred.snapshot.intermissionRemaining < 2700) throw new Error(`Endless mode stopped at wave 100: ${JSON.stringify(endlessAtHundred)}`);
+  await page.evaluate(() => window.__runeRampartTest.clearWave(101));
+  await page.waitForTimeout(150);
+  const endlessAfterHundred = await page.evaluate(() => window.__runeRampartTest.snapshot());
+  if (endlessAfterHundred.wave !== 101 || endlessAfterHundred.waveProfile.wave !== 101 || endlessAfterHundred.gameOver) throw new Error(`Endless mode cannot continue past wave 100: ${JSON.stringify(endlessAfterHundred)}`);
+  await page.locator('#helpButton').click();
   await page.locator('[data-difficulty="veteran"]').click();
   if (!await page.locator('[data-difficulty="veteran"]').evaluate((node) => node.classList.contains('is-selected'))) throw new Error('Veteran difficulty was not selected');
   if (await page.evaluate(() => localStorage.getItem('runeRampart.difficulty')) !== 'veteran') throw new Error('Difficulty selection was not persisted');
@@ -121,7 +144,7 @@ let activeBrowser;
   if (await page.locator('.rune-tile').count() !== 49) throw new Error('Board does not have 49 tiles');
   await assertMinimumFont(page, 'Desktop game');
   if (await page.locator('#waveValue').innerText() !== '001') throw new Error('Wave one did not start');
-  if (await page.locator('#difficultyValue').innerText() !== '老兵') throw new Error('Selected difficulty was not applied');
+  if (await page.locator('#difficultyValue').innerText() !== '萌新') throw new Error('Selected difficulty was not applied');
   const initialCheckpoint = await page.evaluate(() => JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null'));
   if (initialCheckpoint?.reason !== 'wave' || initialCheckpoint.wave !== 1 || initialCheckpoint.difficulty !== 'veteran') throw new Error(`Wave-start checkpoint was not saved: ${JSON.stringify(initialCheckpoint)}`);
   if (await page.locator('#fullscreenButton').getAttribute('aria-label') !== '进入全屏') throw new Error('Fullscreen control is not ready');
@@ -627,7 +650,7 @@ let activeBrowser;
   await resumePage.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
   if (!await resumePage.locator('#resumeModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Saved campaign prompt did not open on reload');
   if (await resumePage.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Difficulty briefing should wait for the resume decision');
-  if (await resumePage.locator('#resumeDifficulty').innerText() !== '老兵' || !await resumePage.locator('#resumeWave').innerText().then((text) => text.includes(String(pausedState.snapshot.wave).padStart(3, '0')))) throw new Error('Resume summary does not describe the saved campaign');
+  if (await resumePage.locator('#resumeDifficulty').innerText() !== '萌新' || !await resumePage.locator('#resumeWave').innerText().then((text) => text.includes(String(pausedState.snapshot.wave).padStart(3, '0')))) throw new Error('Resume summary does not describe the saved campaign');
   await assertMinimumFont(resumePage, 'Resume prompt');
   await resumePage.screenshot({ path: path.join(output, 'resume-prompt.png'), fullPage: false });
   await resumePage.setViewportSize({ width: 390, height: 844 });
@@ -672,21 +695,22 @@ let activeBrowser;
     const test = window.__runeRampartTest;
     const samples = [1, 10, 11, 20, 50, 90, 100].map((wave) => ({
       wave,
-      rookie: test.waveProfile(wave, 'rookie'),
       veteran: test.waveProfile(wave, 'veteran'),
+      endless: test.waveProfile(wave, 'endless'),
       master: test.waveProfile(wave, 'master')
     }));
     return {
       samples,
       masterCurve: Array.from({ length: 100 }, (_, index) => test.waveProfile(index + 1, 'master')),
-      casualRookie: test.simulateBalance('rookie', 1.15),
+      endlessCurve: Array.from({ length: 160 }, (_, index) => test.waveProfile(index + 1, 'endless')),
+      endlessLimitSamples: [100, 101, 250, 99999, 100000].map((wave) => test.waveProfile(wave, 'endless')),
       medianVeteran: test.simulateBalance('veteran', 1.3),
       skilledVeteran: test.simulateBalance('veteran', 1.5),
       strongMaster: test.simulateBalance('master', 2),
       eliteMaster: test.simulateBalance('master', 2.25),
       breachProfiles: {
-        rookieOpening: test.breachDamageProfile('assault', 1, 'rookie', 1),
         veteranOpening: test.breachDamageProfile('assault', 1, 'veteran', 1),
+        endlessOpening: test.breachDamageProfile('assault', 1, 'endless', 1),
         masterOpening: test.breachDamageProfile('assault', 1, 'master', 1),
         masterOpeningBoss: test.breachDamageProfile('boss', 1, 'master', 1),
         masterMid: test.breachDamageProfile('assault', 50, 'master', 5),
@@ -697,19 +721,19 @@ let activeBrowser;
     };
   });
   for (const sample of balance.samples) {
-    if (!(sample.master.enemyCount >= sample.veteran.enemyCount && sample.veteran.enemyCount >= sample.rookie.enemyCount)) {
+    if (!(sample.master.enemyCount >= sample.endless.enemyCount && sample.endless.enemyCount >= sample.veteran.enemyCount)) {
       throw new Error(`Enemy density does not scale by difficulty at wave ${sample.wave}`);
     }
-    if (!(sample.master.advancedChance > sample.veteran.advancedChance && sample.veteran.advancedChance > sample.rookie.advancedChance)) {
+    if (!(sample.master.advancedChance > sample.endless.advancedChance && sample.endless.advancedChance > sample.veteran.advancedChance)) {
       throw new Error(`Advanced-enemy share does not scale at wave ${sample.wave}`);
     }
-    if (!(sample.rookie.relicChance > sample.veteran.relicChance && sample.veteran.relicChance > sample.master.relicChance)) {
+    if (!(sample.veteran.relicChance > sample.endless.relicChance && sample.endless.relicChance > sample.master.relicChance)) {
       throw new Error(`Enemy Easter eggs do not become rarer at higher difficulty on wave ${sample.wave}`);
     }
-    if (!(sample.rookie.runeRelicChance > sample.veteran.runeRelicChance && sample.veteran.runeRelicChance > sample.master.runeRelicChance)) {
+    if (!(sample.veteran.runeRelicChance > sample.endless.runeRelicChance && sample.endless.runeRelicChance > sample.master.runeRelicChance)) {
       throw new Error(`Rune Easter eggs do not become rarer at higher difficulty on wave ${sample.wave}`);
     }
-    if ([sample.rookie, sample.veteran, sample.master].some((profile) => profile.intermission !== 3000)) {
+    if ([sample.veteran, sample.endless, sample.master].some((profile) => profile.intermission !== 3000)) {
       throw new Error(`Cleared waves do not use the fixed three-second intermission at wave ${sample.wave}`);
     }
   }
@@ -717,16 +741,16 @@ let activeBrowser;
   const wave11 = balance.samples.find((sample) => sample.wave === 11).master;
   const wave100 = balance.samples.find((sample) => sample.wave === 100).master;
   const wave1 = balance.samples.find((sample) => sample.wave === 1);
-  if (wave1.rookie.enemyCount < 7 || wave1.veteran.enemyCount < 10 || wave1.master.enemyCount < 12 || wave1.rookie.hpScale < .85 || wave1.veteran.hpScale < 1.45 || wave1.master.hpScale < 1.95) throw new Error(`Opening difficulty targets are not calibrated: ${JSON.stringify(wave1)}`);
-  if (!(wave1.master.spawnInterval < wave1.veteran.spawnInterval && wave1.veteran.spawnInterval < wave1.rookie.spawnInterval && wave1.master.speedScale > wave1.veteran.speedScale && wave1.veteran.speedScale > wave1.rookie.speedScale && wave1.master.advancedChance >= .64)) throw new Error(`Opening density, speed and elite ratio are not pressure-scaled: ${JSON.stringify(wave1)}`);
-  const openingPressure = ['rookie', 'veteran', 'master'].map((key) => {
+  if (wave1.veteran.enemyCount < 10 || wave1.endless.enemyCount < 11 || wave1.master.enemyCount < 12 || wave1.veteran.hpScale < 1.45 || wave1.endless.hpScale <= wave1.veteran.hpScale || wave1.master.hpScale < 1.95) throw new Error(`Opening difficulty targets are not calibrated: ${JSON.stringify(wave1)}`);
+  if (!(wave1.master.spawnInterval < wave1.endless.spawnInterval && wave1.endless.spawnInterval < wave1.veteran.spawnInterval && wave1.master.speedScale > wave1.endless.speedScale && wave1.endless.speedScale > wave1.veteran.speedScale && wave1.master.advancedChance >= .64)) throw new Error(`Opening density, speed and elite ratio are not pressure-scaled: ${JSON.stringify(wave1)}`);
+  const openingPressure = ['veteran', 'endless', 'master'].map((key) => {
     const profile = wave1[key];
     return profile.enemyCount * profile.hpScale * profile.speedScale * (1 + profile.advancedChance);
   });
-  if (!(openingPressure[1] > openingPressure[0] * 2.5 && openingPressure[2] > openingPressure[1] * 2)) throw new Error(`Difficulty tiers are not meaningfully separated: ${JSON.stringify({ wave1, openingPressure })}`);
+  if (!(openingPressure[1] > openingPressure[0] && openingPressure[2] > openingPressure[1])) throw new Error(`Difficulty tiers are not meaningfully separated: ${JSON.stringify({ wave1, openingPressure })}`);
   const breach = balance.breachProfiles;
-  if (!(breach.masterOpening.finalDamage > breach.veteranOpening.finalDamage && breach.veteranOpening.finalDamage > breach.rookieOpening.finalDamage)) throw new Error(`Opening breach damage does not scale by difficulty: ${JSON.stringify(breach)}`);
-  if (breach.rookieOpening.hitsToBreak < 20 || breach.veteranOpening.hitsToBreak < 15 || breach.masterOpening.hitsToBreak < 12 || breach.masterOpeningBoss.hitsToBreak < 6) throw new Error(`Opening enemies can erase the wall in too few breaches: ${JSON.stringify(breach)}`);
+  if (!(breach.masterOpening.finalDamage > breach.endlessOpening.finalDamage && breach.endlessOpening.finalDamage > breach.veteranOpening.finalDamage)) throw new Error(`Opening breach damage does not scale by difficulty: ${JSON.stringify(breach)}`);
+  if (breach.veteranOpening.hitsToBreak < 15 || breach.endlessOpening.hitsToBreak < 15 || breach.masterOpening.hitsToBreak < 12 || breach.masterOpeningBoss.hitsToBreak < 6) throw new Error(`Opening enemies can erase the wall in too few breaches: ${JSON.stringify(breach)}`);
   if (breach.masterMid.hitsToBreak < 12 || breach.masterLate.hitsToBreak < 12 || breach.masterMidBoss.hitsToBreak < 6 || breach.masterLateBoss.hitsToBreak < 6) throw new Error(`Mid/late breach damage grows too aggressively for reasonable defense investment: ${JSON.stringify(breach)}`);
   if ([breach.masterMid, breach.masterLate, breach.masterMidBoss, breach.masterLateBoss].some((sample) => sample.finalDamage >= sample.displayedDamage || sample.hitsToBreak < 1)) throw new Error(`Defense is not applied to breach damage: ${JSON.stringify(breach)}`);
   if (!wave10.isBossWave || wave11.stage !== wave10.stage + 1 || !(wave11.hpScale > wave10.hpScale)) throw new Error('Ten-wave step-up is not calibrated');
@@ -739,7 +763,12 @@ let activeBrowser;
     if (profile.wave % 10 === 0 && !profile.isBossWave) throw new Error(`Boss wave missing at ${profile.wave}`);
     if (profile.wave % 10 === 1 && profile.wave > 1 && profile.stage !== previous.stage + 1) throw new Error(`Stage transition missing at ${profile.wave}`);
   });
-  if (balance.casualRookie.firstFailure !== null || balance.casualRookie.minimumMargin < 1) throw new Error(`Rookie is not clearable by casual-positive play: ${JSON.stringify(balance.casualRookie)}`);
+  balance.endlessCurve.forEach((profile, index) => {
+    if (index === 0) return;
+    const previous = balance.endlessCurve[index - 1];
+    if (!(profile.hpScale > previous.hpScale && profile.damageScale > previous.damageScale && profile.defenseScale > previous.defenseScale && profile.speedScale > previous.speedScale && profile.intensity > previous.intensity)) throw new Error(`Endless attack pressure does not rise on every wave: ${JSON.stringify({ previous, profile })}`);
+  });
+  if (balance.endlessLimitSamples.map((profile) => profile.wave).join(',') !== '100,101,250,99999,99999') throw new Error(`Endless wave limit is not capped by configuration: ${JSON.stringify(balance.endlessLimitSamples)}`);
   if (balance.medianVeteran.firstFailure === null || balance.skilledVeteran.firstFailure !== null) throw new Error(`Veteran is not calibrated as a meaningful skill divider: ${JSON.stringify({ median: balance.medianVeteran, skilled: balance.skilledVeteran })}`);
   if (balance.strongMaster.firstFailure === null || balance.eliteMaster.firstFailure !== null || !(balance.eliteMaster.minimumMargin > 1 && balance.eliteMaster.minimumMargin < 1.08)) throw new Error(`Master is not calibrated for a tiny elite clear window: ${JSON.stringify({ strong: balance.strongMaster, elite: balance.eliteMaster })}`);
   const eliteLevels = Object.values(balance.eliteMaster.equipment);
@@ -900,7 +929,7 @@ let activeBrowser;
       horizontalFit: card.scrollWidth <= card.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1
     };
   });
-  if (victoryView.rank !== '#01' || victoryView.difficulty !== '老兵' || victoryView.boardParent !== 'victoryHistorySlot' || victoryView.currentRows !== 1 || victoryView.rows[0]?.[2] !== '100 波' || !victoryView.breakdown.includes('波次 150,000') || !victoryView.breakdown.includes('速通奖励') || !victoryView.history[0]?.victory || victoryView.history[0]?.clearedWaves !== 100 || victoryView.score.replace(/\D/g, '') !== String(victoryView.history[0]?.settlementScore) || !victoryView.horizontalFit) throw new Error(`Victory settlement does not show and highlight the persisted leaderboard: ${JSON.stringify(victoryView)}`);
+  if (victoryView.rank !== '#01' || victoryView.difficulty !== '萌新' || victoryView.boardParent !== 'victoryHistorySlot' || victoryView.currentRows !== 1 || victoryView.rows[0]?.[2] !== '100 波' || !victoryView.breakdown.includes('波次 150,000') || !victoryView.breakdown.includes('速通奖励') || !victoryView.history[0]?.victory || victoryView.history[0]?.clearedWaves !== 100 || victoryView.score.replace(/\D/g, '') !== String(victoryView.history[0]?.settlementScore) || !victoryView.horizontalFit) throw new Error(`Victory settlement does not show and highlight the persisted leaderboard: ${JSON.stringify(victoryView)}`);
   await page.locator('[data-history-filter="veteran"]').click();
   if (await page.locator('#historyRows tr.is-current td').first().innerText() !== '#01') throw new Error('Victory leaderboard cannot switch to and rerank the current difficulty');
   await page.locator('[data-history-filter="all"]').click();
@@ -925,10 +954,11 @@ let activeBrowser;
   await page.setViewportSize({ width: 1120, height: 900 });
   await page.waitForTimeout(240);
   await page.evaluate(() => window.__runeRampartTest.setHistory([
+    { id: 'endless-fewer-higher-score', achievedAt: 1000, difficulty: 'endless', clearedWaves: 120, settlementScore: 999999999, baseScore: 999999999, kills: 999, totalMatches: 999, activePlayMs: 1000 },
+    { id: 'endless-more-lower-score', achievedAt: 1500, difficulty: 'endless', clearedWaves: 250, settlementScore: 1, baseScore: 1, kills: 0, totalMatches: 0, activePlayMs: 999000 },
     { id: 'master-low', achievedAt: 4000, difficulty: 'master', clearedWaves: 0, settlementScore: 1, baseScore: 1, kills: 0, totalMatches: 0, activePlayMs: 1000 },
     { id: 'veteran-late', achievedAt: 3000, difficulty: 'veteran', clearedWaves: 10, settlementScore: 18000, baseScore: 2800, kills: 20, totalMatches: 12, activePlayMs: 100000 },
-    { id: 'veteran-early', achievedAt: 2000, difficulty: 'veteran', clearedWaves: 10, settlementScore: 18000, baseScore: 2800, kills: 20, totalMatches: 12, activePlayMs: 100000 },
-    { id: 'rookie-high', achievedAt: 1000, difficulty: 'rookie', clearedWaves: 99, settlementScore: 999999, baseScore: 999999, kills: 999, totalMatches: 999, activePlayMs: 999000 }
+    { id: 'veteran-early', achievedAt: 2000, difficulty: 'veteran', clearedWaves: 10, settlementScore: 18000, baseScore: 2800, kills: 20, totalMatches: 12, activePlayMs: 100000 }
   ]));
   await page.locator('[data-difficulty="veteran"]').click();
   await page.locator('#startButton').click();
@@ -950,14 +980,14 @@ let activeBrowser;
     currentRows: document.querySelectorAll('#historyRows tr.is-current').length,
     rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent))
   }));
-  if (settlementView.rank !== '#02' || settlementView.difficulty !== '老兵' || settlementView.wave !== '12 / 100' || settlementView.kills !== '42' || settlementView.matches !== '18' || settlementView.time !== '02:05' || settlementView.score.replace(/\D/g, '') !== '23250' || !settlementView.breakdown.includes('基础军功 5,000') || !settlementView.breakdown.includes('波次 18,000') || settlementView.boardParent !== 'failureHistorySlot' || settlementView.currentRows !== 1) {
+  if (settlementView.rank !== '#04' || settlementView.difficulty !== '萌新' || settlementView.wave !== '12 / 100' || settlementView.kills !== '42' || settlementView.matches !== '18' || settlementView.time !== '02:05' || settlementView.score.replace(/\D/g, '') !== '23250' || !settlementView.breakdown.includes('基础军功 5,000') || !settlementView.breakdown.includes('波次 18,000') || settlementView.boardParent !== 'failureHistorySlot' || settlementView.currentRows !== 1) {
     throw new Error(`Failure settlement does not explain the result: ${JSON.stringify(settlementView)}`);
   }
   const historyIds = settlementHistory.map((record) => record.id);
-  if (historyIds[0] !== 'master-low' || historyIds[1] === 'veteran-early' || historyIds.indexOf('veteran-early') > historyIds.indexOf('veteran-late') || historyIds.at(-1) !== 'rookie-high') {
+  if (historyIds[0] !== 'endless-more-lower-score' || historyIds[1] !== 'endless-fewer-higher-score' || historyIds[2] !== 'master-low' || historyIds.indexOf('veteran-early') > historyIds.indexOf('veteran-late')) {
     throw new Error(`History ranking does not follow difficulty, achievement and earlier-time priority: ${JSON.stringify(settlementHistory)}`);
   }
-  if (settlementView.rows[0]?.[1] !== '大佬' || settlementView.rows[1]?.[1] !== '老兵' || settlementView.rows.at(-1)?.[1] !== '新手') throw new Error(`History ranking UI order is incorrect: ${JSON.stringify(settlementView.rows)}`);
+  if (settlementView.rows[0]?.[1] !== '无限' || settlementView.rows[0]?.[2] !== '250 波' || settlementView.rows[2]?.[1] !== '大佬' || settlementView.rows[3]?.[1] !== '萌新') throw new Error(`History ranking UI order is incorrect: ${JSON.stringify(settlementView.rows)}`);
   await page.locator('[data-history-filter="veteran"]').click();
   const veteranRanking = await page.evaluate(() => ({
     active: document.querySelector('[data-history-filter="veteran"]').getAttribute('aria-pressed'),
@@ -965,12 +995,15 @@ let activeBrowser;
     rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)),
     currentRank: document.querySelector('#historyRows tr.is-current td')?.textContent
   }));
-  if (veteranRanking.active !== 'true' || veteranRanking.count !== '3 条战报' || veteranRanking.rows.some((row) => row[1] !== '老兵') || veteranRanking.rows[0]?.[0] !== '#01' || veteranRanking.currentRank !== '#01') throw new Error(`Difficulty-specific ranking did not rerank veteran records: ${JSON.stringify(veteranRanking)}`);
+  if (veteranRanking.active !== 'true' || veteranRanking.count !== '3 条战报' || veteranRanking.rows.some((row) => row[1] !== '萌新') || veteranRanking.rows[0]?.[0] !== '#01' || veteranRanking.currentRank !== '#01') throw new Error(`Difficulty-specific ranking did not rerank veteran records: ${JSON.stringify(veteranRanking)}`);
+  await page.locator('[data-history-filter="endless"]').click();
+  const endlessRanking = await page.evaluate(() => [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)));
+  if (endlessRanking.length !== 2 || endlessRanking[0]?.[0] !== '#01' || endlessRanking[0]?.[2] !== '250 波' || endlessRanking[1]?.[2] !== '120 波') throw new Error(`Endless ranking does not prioritize cleared waves: ${JSON.stringify(endlessRanking)}`);
   await page.locator('[data-history-filter="master"]').click();
   const masterRanking = await page.evaluate(() => [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)));
   if (masterRanking.length !== 1 || masterRanking[0][0] !== '#01' || masterRanking[0][1] !== '大佬') throw new Error(`Master-only ranking is incorrect: ${JSON.stringify(masterRanking)}`);
   await page.locator('[data-history-filter="all"]').click();
-  if (await page.locator('#historyRows tr').count() !== 5) throw new Error('Overall ranking did not return after difficulty filtering');
+  if (await page.locator('#historyRows tr').count() !== 6) throw new Error('Overall ranking did not return after difficulty filtering');
   await assertMinimumFont(page, 'Failure settlement');
   await page.screenshot({ path: path.join(output, 'failure-settlement.png'), fullPage: false });
 

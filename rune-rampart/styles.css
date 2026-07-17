@@ -991,6 +991,10 @@ button:focus-visible {
 .difficulty-card:hover { background: #eee4c9; border-color: #716a59; transform: translateY(-2px); }
 .difficulty-card.is-selected { color: var(--cream); background: #30322b; border-color: #20221d; box-shadow: 4px 5px 0 rgba(57,53,43,.2); }
 .difficulty-card.is-selected::after { background: var(--red); transform: scaleX(1); }.difficulty-card.is-selected span i, .difficulty-card.is-selected strong, .difficulty-card.is-selected small { color: #c7c0aa; }.difficulty-card.is-selected span b { color: #f0bd48; }
+.difficulty-card[data-difficulty="endless"] { overflow: hidden; background-image: repeating-linear-gradient(135deg, transparent 0 12px, rgba(119,55,43,.055) 12px 13px); }
+.difficulty-card[data-difficulty="endless"] span i { color: #a64738; font-size: 20px; font-weight: 900; }
+.difficulty-card[data-difficulty="endless"].is-selected { background-color: #2b2925; background-image: repeating-linear-gradient(135deg, transparent 0 12px, rgba(213,82,55,.11) 12px 13px); }
+.difficulty-card[data-difficulty="endless"].is-selected::after { background: #e3ad3c; }
 .enemy-intel { display: grid; grid-template-columns: auto repeat(5, 1fr); align-items: center; gap: 5px; margin: 8px 0; padding: 6px; background: #d7cfb8; border-top: 1px dashed #8d856f; border-bottom: 1px dashed #8d856f; }
 .enemy-intel > span { padding: 0 7px 0 3px; color: #776f5c; font-size: 14px; font-weight: 900; letter-spacing: .08em; }
 .enemy-intel > div { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; padding: 4px; background: rgba(247,239,213,.7); }
