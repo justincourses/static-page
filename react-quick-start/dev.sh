@@ -1,5 +1,3 @@
 #!/bin/bash
 
-pnpm install
-
-pnpm dev
+bun install && bun run dev
