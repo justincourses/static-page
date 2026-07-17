@@ -70,6 +70,9 @@
     try { localStorage.removeItem(key); } catch (error) { /* Storage can be unavailable in private contexts. */ }
   };
   const els = {
+    gameViewport: $('#gameViewport'),
+    gameShell: $('#gameShell'),
+    orientationGuard: $('#orientationGuard'),
     board: $('#matchBoard'),
     boardLock: $('#boardLock'),
     battlefield: $('#battlefield'),
@@ -95,6 +98,54 @@
     upgradeBanner: $('#equipmentUpgradeBanner'),
     volleyButton: $('#volleyButton')
   };
+
+  const COMPACT_LANDSCAPE_CANVAS_WIDTH = 1180;
+  let gameFitFrame = 0;
+
+  function currentGameScale() {
+    const scale = Number.parseFloat(getComputedStyle(els.gameShell).getPropertyValue('--game-scale'));
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+  }
+
+  function fitGameToViewport() {
+    gameFitFrame = 0;
+    const viewportWidth = Math.max(1, document.documentElement.clientWidth || window.innerWidth);
+    const viewportHeight = Math.max(1, window.innerHeight);
+    const portraitLocked = viewportWidth <= 820 && viewportHeight > viewportWidth;
+    const compactLandscape = !portraitLocked && viewportWidth < COMPACT_LANDSCAPE_CANVAS_WIDTH && viewportWidth > viewportHeight;
+
+    document.body.classList.toggle('portrait-game-locked', portraitLocked);
+    els.gameViewport.classList.toggle('is-portrait-locked', portraitLocked);
+    els.orientationGuard.classList.toggle('is-visible', portraitLocked);
+    els.orientationGuard.setAttribute('aria-hidden', String(!portraitLocked));
+    els.gameShell.inert = portraitLocked;
+
+    els.gameViewport.classList.toggle('is-compact-landscape', compactLandscape);
+    els.gameShell.style.setProperty('--game-canvas-width', compactLandscape ? `${COMPACT_LANDSCAPE_CANVAS_WIDTH}px` : '100%');
+    els.gameShell.style.setProperty('--game-scale', '1');
+    els.gameViewport.classList.remove('is-scaled');
+    els.gameViewport.style.removeProperty('--game-scaled-height');
+
+    if (portraitLocked) {
+      els.gameViewport.dataset.scale = '1';
+      return;
+    }
+
+    const naturalWidth = Math.max(1, els.gameShell.scrollWidth, els.gameShell.offsetWidth);
+    const naturalHeight = Math.max(1, els.gameShell.scrollHeight, els.gameShell.offsetHeight);
+    const scale = Math.min(1, viewportWidth / naturalWidth, viewportHeight / naturalHeight);
+    const normalizedScale = scale > .998 ? 1 : scale;
+
+    els.gameShell.style.setProperty('--game-scale', normalizedScale.toFixed(4));
+    els.gameViewport.dataset.scale = normalizedScale.toFixed(4);
+    els.gameViewport.style.setProperty('--game-scaled-height', `${Math.ceil(naturalHeight * normalizedScale)}px`);
+    els.gameViewport.classList.toggle('is-scaled', normalizedScale < 1);
+  }
+
+  function scheduleGameFit() {
+    cancelAnimationFrame(gameFitFrame);
+    gameFitFrame = requestAnimationFrame(fitGameToViewport);
+  }
 
   const sound = {
     muted: readStorage(STORAGE_KEYS.muted) === 'true',
@@ -845,6 +896,7 @@
 
   function createRuneBurst(matches) {
     const effectsRect = els.boardEffects.getBoundingClientRect();
+    const scale = currentGameScale();
     matches.forEach((index) => {
       const tile = els.board.querySelector(`[data-index="${index}"]`);
       if (!tile) return;
@@ -855,8 +907,8 @@
         const angle = (Math.PI * 2 * particleIndex / 4) + Math.random() * .65;
         const distance = 25 + Math.random() * 45;
         particle.className = `rune-spark ${type}`;
-        particle.style.left = `${rect.left - effectsRect.left + rect.width / 2}px`;
-        particle.style.top = `${rect.top - effectsRect.top + rect.height / 2}px`;
+        particle.style.left = `${(rect.left - effectsRect.left + rect.width / 2) / scale}px`;
+        particle.style.top = `${(rect.top - effectsRect.top + rect.height / 2) / scale}px`;
         particle.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
         particle.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
         particle.style.animationDelay = `${particleIndex * 18}ms`;
@@ -1295,9 +1347,10 @@
     if (!anchor) return { x: fallbackX, y: fallbackY };
     const fieldRect = container.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
+    const scale = currentGameScale();
     return {
-      x: anchorRect.left + anchorRect.width / 2 - fieldRect.left,
-      y: anchorRect.top + anchorRect.height / 2 - fieldRect.top
+      x: (anchorRect.left + anchorRect.width / 2 - fieldRect.left) / scale,
+      y: (anchorRect.top + anchorRect.height / 2 - fieldRect.top) / scale
     };
   }
 
@@ -1307,10 +1360,13 @@
       return;
     }
     const fieldRect = els.battlefield.getBoundingClientRect();
-    const pivot = battlefieldAnchor('.turret-pivot', fieldRect.width * .12, fieldRect.height * .42);
+    const scale = currentGameScale();
+    const fieldWidth = fieldRect.width / scale;
+    const fieldHeight = fieldRect.height / scale;
+    const pivot = battlefieldAnchor('.turret-pivot', fieldWidth * .12, fieldHeight * .42);
     const enemyRect = enemy.el.getBoundingClientRect();
-    const endX = enemyRect.left + enemyRect.width / 2 - fieldRect.left;
-    const endY = enemyRect.top + enemyRect.height * .55 - fieldRect.top;
+    const endX = (enemyRect.left + enemyRect.width / 2 - fieldRect.left) / scale;
+    const endY = (enemyRect.top + enemyRect.height * .55 - fieldRect.top) / scale;
     els.fortress.style.setProperty('--aim-angle', `${Math.atan2(endY - pivot.y, endX - pivot.x)}rad`);
   }
 
@@ -1344,18 +1400,21 @@
   function launchProjectile(enemy, damage, crit, now, shotIndex = 0, shotCount = 1, emberCharged = false) {
     sound.tone(690 + shotIndex * 42 + Math.random() * 60, .055, 'sawtooth', .012);
     const fieldRect = els.projectilesLayer.getBoundingClientRect();
-    const muzzle = battlefieldAnchor('.muzzle-anchor', fieldRect.width * .19, fieldRect.height * .42, els.projectilesLayer);
+    const scale = currentGameScale();
+    const fieldWidth = fieldRect.width / scale;
+    const fieldHeight = fieldRect.height / scale;
+    const muzzle = battlefieldAnchor('.muzzle-anchor', fieldWidth * .19, fieldHeight * .42, els.projectilesLayer);
     const startX = muzzle.x;
     const fanOffset = (shotIndex - (shotCount - 1) / 2) * 9;
     const startY = muzzle.y;
     const enemyRect = enemy.el.getBoundingClientRect();
-    const initialEndX = enemyRect.left + enemyRect.width / 2 - fieldRect.left;
+    const initialEndX = (enemyRect.left + enemyRect.width / 2 - fieldRect.left) / scale;
     const initialDistance = Math.abs(initialEndX - startX);
     const travelTime = Math.min(460, Math.max(160, initialDistance / 1.2));
     const speedScale = enemy.slowUntil > now ? .55 : 1;
-    const predictedTravel = fieldRect.width * enemy.speed * speedScale * travelTime / 100000;
-    const endX = Math.max(fieldRect.width * .15, initialEndX - predictedTravel);
-    const endY = enemyRect.top + enemyRect.height * .55 - fieldRect.top + fanOffset * .18;
+    const predictedTravel = fieldWidth * enemy.speed * speedScale * travelTime / 100000;
+    const endX = Math.max(fieldWidth * .15, initialEndX - predictedTravel);
+    const endY = (enemyRect.top + enemyRect.height * .55 - fieldRect.top) / scale + fanOffset * .18;
     const dx = endX - startX;
     const dy = endY - startY;
     const projectile = document.createElement('i');
@@ -1728,6 +1787,7 @@
     els.fullscreenButton.setAttribute('aria-label', active ? '退出全屏' : '进入全屏');
     els.fullscreenButton.setAttribute('title', active ? '退出全屏' : '进入全屏');
     els.fullscreenButton.classList.toggle('is-active', active);
+    scheduleGameFit();
   }
 
   els.board.addEventListener('click', (event) => {
@@ -1762,6 +1822,10 @@
     if (document.hidden && state.started && !state.gameOver) togglePause(true);
   });
   window.addEventListener('pagehide', () => saveProgress('leave'));
+  window.addEventListener('resize', scheduleGameFit, { passive: true });
+  window.addEventListener('orientationchange', scheduleGameFit, { passive: true });
+  window.addEventListener('load', scheduleGameFit, { once: true });
+  if (document.fonts?.ready) document.fonts.ready.then(scheduleGameFit);
 
   if (new URLSearchParams(window.location.search).has('testMode')) {
     window.__runeRampartTest = {
@@ -1890,6 +1954,7 @@
   updateMusicButton();
   updateFullscreenButton();
   updateUI();
+  scheduleGameFit();
   const savedProgress = readSavedProgress();
   if (savedProgress) showResumePrompt(savedProgress);
   else els.introModal.classList.add('is-first-visit');

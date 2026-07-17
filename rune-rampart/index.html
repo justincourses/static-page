@@ -17,7 +17,8 @@
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
-    <main class="game-shell">
+    <div class="game-viewport" id="gameViewport">
+    <main class="game-shell" id="gameShell">
       <header class="topbar">
         <div class="brand-lockup">
           <span class="chapter-mark">百波挑战</span>
@@ -245,6 +246,18 @@
         </section>
       </div>
     </main>
+    </div>
+
+    <div class="orientation-guard" id="orientationGuard" role="status" aria-hidden="true">
+      <div class="orientation-card">
+        <span class="orientation-icon" aria-hidden="true">↻</span>
+        <div>
+          <span>移动端作战提示</span>
+          <h2>请将设备横过来</h2>
+          <p>战场仅适配手机横屏；使用电脑游玩可获得最佳视野与操作体验。</p>
+        </div>
+      </div>
+    </div>
 
     <div class="modal-backdrop is-open" id="introModal" role="dialog" aria-modal="true" aria-labelledby="introTitle" aria-describedby="introDescription">
       <div class="briefing-card campaign-briefing">
@@ -252,6 +265,7 @@
         <span class="briefing-kicker">是男人就顶100波 · 战役配置</span>
         <h2 id="introTitle">顶过十次跃迁，<br />站上第 100 波。</h2>
         <p id="introDescription">每关都会变强，每 10 关敌潮跃升一级。持续消除并正确分配攻击、攻速与防御，才有机会登顶。</p>
+        <p class="briefing-device-note"><b>设备建议</b> 电脑端体验最佳；使用手机时请切换到横屏。</p>
 
         <fieldset class="difficulty-picker">
           <legend>选择战役难度</legend>

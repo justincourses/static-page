@@ -90,6 +90,7 @@ let activeBrowser;
   if (await page.locator('.difficulty-card').count() !== 3) throw new Error('Difficulty picker does not have three levels');
   const difficultyNames = await page.locator('.difficulty-card span b').allInnerTexts();
   if (difficultyNames.join('/') !== '新手/老兵/大佬') throw new Error(`Unexpected difficulty names: ${difficultyNames.join('/')}`);
+  if (!await page.locator('.briefing-device-note').innerText().then((text) => text.includes('电脑端体验最佳') && text.includes('横屏'))) throw new Error('Welcome screen does not explain the recommended device orientation');
   await assertMinimumFont(page, 'Desktop welcome');
   await page.screenshot({ path: path.join(output, 'welcome.png'), fullPage: false });
   await page.locator('[data-difficulty="veteran"]').click();
@@ -190,7 +191,8 @@ let activeBrowser;
     const projectile = document.querySelectorAll('.projectile')[before];
     const muzzle = document.querySelector('.muzzle-anchor').getBoundingClientRect();
     const layer = document.querySelector('#projectilesLayer').getBoundingClientRect();
-    const muzzlePoint = { x: muzzle.left + muzzle.width / 2 - layer.left, y: muzzle.top + muzzle.height / 2 - layer.top };
+    const scale = Number.parseFloat(document.querySelector('#gameViewport').dataset.scale) || 1;
+    const muzzlePoint = { x: (muzzle.left + muzzle.width / 2 - layer.left) / scale, y: (muzzle.top + muzzle.height / 2 - layer.top) / scale };
     const projectilePoint = { x: Number.parseFloat(projectile.style.left), y: Number.parseFloat(projectile.style.top) };
     return {
       ...burst,
@@ -277,6 +279,7 @@ let activeBrowser;
   if (manaAfterVolley.mana !== manaSpend - 18 || manaAfterVolley.feedback !== '-18') throw new Error(`Mana consumption is not perceptible: ${JSON.stringify({ manaSpend, manaAfterVolley })}`);
 
   await page.waitForTimeout(1500);
+  if (await page.locator('.enemy').count() < 1) await page.evaluate(() => window.__runeRampartTest.spawnEnemy('assault'));
   if (await page.locator('.enemy').count() < 1) throw new Error('No enemy spawned');
   await page.evaluate(() => {
     window.__runeRampartTest.spawnEnemy('swift');
@@ -399,36 +402,84 @@ let activeBrowser;
   const idealLevels = Object.values(balance.ideal.equipment);
   if (Math.max(...idealLevels) - Math.min(...idealLevels) > 1) throw new Error(`Ideal auto-upgrade is not balanced: ${JSON.stringify(balance.ideal.equipment)}`);
 
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await page.waitForTimeout(350);
+  const ultraWideFit = await page.evaluate(() => {
+    const shell = document.querySelector('#gameShell');
+    const viewport = document.querySelector('#gameViewport');
+    const rect = shell.getBoundingClientRect();
+    const scale = Number.parseFloat(viewport.dataset.scale) || 1;
+    return {
+      scale,
+      rect: rect.toJSON(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      documentHeight: document.documentElement.scrollHeight,
+      widthRatio: rect.width / shell.offsetWidth,
+      heightRatio: rect.height / shell.offsetHeight,
+      scaled: viewport.classList.contains('is-scaled')
+    };
+  });
+  if (!ultraWideFit.scaled || !(ultraWideFit.scale < 1)) throw new Error(`Ultra-wide short viewport did not activate proportional fit: ${JSON.stringify(ultraWideFit)}`);
+  if (ultraWideFit.rect.left < -1 || ultraWideFit.rect.right > ultraWideFit.viewportWidth + 1 || ultraWideFit.rect.top < -1 || ultraWideFit.rect.bottom > ultraWideFit.viewportHeight + 1) throw new Error(`Scaled desktop canvas is not fully visible: ${JSON.stringify(ultraWideFit)}`);
+  if (Math.abs(ultraWideFit.widthRatio - ultraWideFit.heightRatio) > .002 || Math.abs(ultraWideFit.widthRatio - ultraWideFit.scale) > .002) throw new Error(`Desktop canvas is not scaled uniformly: ${JSON.stringify(ultraWideFit)}`);
+  if (ultraWideFit.documentHeight > ultraWideFit.viewportHeight + 1) throw new Error(`Scaled desktop canvas still scrolls vertically: ${JSON.stringify(ultraWideFit)}`);
+  const scaledShot = await page.evaluate(() => {
+    const before = document.querySelectorAll('.projectile').length;
+    window.__runeRampartTest.fireBurst();
+    const projectile = document.querySelectorAll('.projectile')[before];
+    const muzzle = document.querySelector('.muzzle-anchor').getBoundingClientRect();
+    const layer = document.querySelector('#projectilesLayer').getBoundingClientRect();
+    const scale = Number.parseFloat(document.querySelector('#gameViewport').dataset.scale) || 1;
+    const muzzlePoint = { x: (muzzle.left + muzzle.width / 2 - layer.left) / scale, y: (muzzle.top + muzzle.height / 2 - layer.top) / scale };
+    const projectilePoint = { x: Number.parseFloat(projectile.style.left), y: Number.parseFloat(projectile.style.top) };
+    return { scale, muzzleError: Math.hypot(muzzlePoint.x - projectilePoint.x, muzzlePoint.y - projectilePoint.y) };
+  });
+  if (scaledShot.muzzleError > 1) throw new Error(`Scaled projectile no longer originates at the cannon muzzle: ${JSON.stringify(scaledShot)}`);
+  await page.screenshot({ path: path.join(output, 'ultrawide-fit.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForTimeout(350);
+  const landscapeMobileFit = await page.evaluate(() => {
+    const shell = document.querySelector('#gameShell');
+    const viewport = document.querySelector('#gameViewport');
+    const guard = document.querySelector('#orientationGuard');
+    const rect = shell.getBoundingClientRect();
+    const scale = Number.parseFloat(viewport.dataset.scale) || 1;
+    return {
+      scale,
+      rect: rect.toJSON(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      widthRatio: rect.width / shell.offsetWidth,
+      heightRatio: rect.height / shell.offsetHeight,
+      guardVisible: getComputedStyle(guard).display !== 'none',
+      compactLandscape: viewport.classList.contains('is-compact-landscape')
+    };
+  });
+  if (!landscapeMobileFit.compactLandscape || landscapeMobileFit.guardVisible || !(landscapeMobileFit.scale < 1)) throw new Error(`Mobile landscape did not use the fitted desktop canvas: ${JSON.stringify(landscapeMobileFit)}`);
+  if (landscapeMobileFit.rect.left < -1 || landscapeMobileFit.rect.right > landscapeMobileFit.viewportWidth + 1 || landscapeMobileFit.rect.top < -1 || landscapeMobileFit.rect.bottom > landscapeMobileFit.viewportHeight + 1) throw new Error(`Mobile landscape canvas is not fully visible: ${JSON.stringify(landscapeMobileFit)}`);
+  if (Math.abs(landscapeMobileFit.widthRatio - landscapeMobileFit.heightRatio) > .002) throw new Error(`Mobile landscape canvas is not scaled uniformly: ${JSON.stringify(landscapeMobileFit)}`);
+  await page.screenshot({ path: path.join(output, 'mobile-landscape.png'), fullPage: false });
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
-  await page.evaluate(() => window.__runeRampartTest.grantRelic('blast'));
-  const mobileBuffLayout = await page.evaluate(() => {
-    const buff = document.querySelector('.combat-buff').getBoundingClientRect();
-    const turret = document.querySelector('.turret').getBoundingClientRect();
-    return { buff: buff.toJSON(), turret: turret.toJSON(), overlapsTurret: buff.left < turret.right && buff.right > turret.left && buff.top < turret.bottom && buff.bottom > turret.top };
-  });
-  if (mobileBuffLayout.overlapsTurret) throw new Error(`Mobile relic effect frame overlaps the turret: ${JSON.stringify(mobileBuffLayout)}`);
-  const mobileOverflow = await page.evaluate(() => ({
-    fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
-    scrollWidth: document.documentElement.scrollWidth,
-    viewport: window.innerWidth,
-    offenders: [...document.querySelectorAll('body *')]
-      .filter((node) => {
-        const rect = node.getBoundingClientRect();
-        return getComputedStyle(node).display !== 'none' && (rect.right > window.innerWidth + 1 || rect.left < -1);
-      })
-      .slice(0, 12)
-      .map((node) => ({ tag: node.tagName, id: node.id, className: node.className, rect: node.getBoundingClientRect().toJSON() }))
+  const portraitGuard = await page.evaluate(() => ({
+    visible: getComputedStyle(document.querySelector('#orientationGuard')).display !== 'none',
+    message: document.querySelector('#orientationGuard').innerText,
+    shellInert: document.querySelector('#gameShell').inert,
+    bodyLocked: document.body.classList.contains('portrait-game-locked'),
+    fits: document.documentElement.scrollWidth <= window.innerWidth + 1 && document.documentElement.scrollHeight <= window.innerHeight + 1
   }));
-  if (!mobileOverflow.fits) throw new Error(`Mobile layout overflows horizontally: ${JSON.stringify(mobileOverflow)}`);
-  await assertMinimumFont(page, 'Mobile game');
-  await page.screenshot({ path: path.join(output, 'mobile.png'), fullPage: true });
-  await page.evaluate(() => window.__runeRampartTest.clearRelics());
-  await page.locator('#helpButton').click();
+  if (!portraitGuard.visible || !portraitGuard.shellInert || !portraitGuard.bodyLocked || !portraitGuard.fits || !portraitGuard.message.includes('请将设备横过来') || !portraitGuard.message.includes('电脑')) throw new Error(`Portrait orientation guard is incomplete: ${JSON.stringify(portraitGuard)}`);
+  await assertMinimumFont(page, 'Portrait orientation guard');
+  await page.screenshot({ path: path.join(output, 'mobile-portrait-guard.png'), fullPage: false });
+  await page.evaluate(() => document.querySelector('#helpButton').click());
   await page.locator('#introModal.is-open').waitFor({ state: 'visible', timeout: 500 });
   await page.waitForTimeout(300);
   const mobileDialogFits = await page.locator('.campaign-briefing').evaluate((node) => node.scrollWidth <= node.clientWidth + 1);
   if (!mobileDialogFits) throw new Error('Mobile campaign options overflow horizontally');
+  if (!await page.locator('.briefing-device-note').innerText().then((text) => text.includes('电脑端体验最佳') && text.includes('横屏'))) throw new Error('Portrait welcome screen is missing the device guidance');
   await assertMinimumFont(page, 'Mobile welcome');
   await page.screenshot({ path: path.join(output, 'mobile-welcome.png'), fullPage: false });
 
