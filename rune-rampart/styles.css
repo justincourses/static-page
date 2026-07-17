@@ -238,6 +238,7 @@ button:focus-visible {
 
 .rune-legend { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 10px 0 15px; }
 .legend-item {
+  position: relative;
   min-width: 0;
   display: grid;
   grid-template-columns: 23px 1fr;
@@ -255,6 +256,27 @@ button:focus-visible {
 .legend-item.moss { color: #92c273; }
 .legend-item.coin { color: #f1c75e; }
 .legend-item.is-gaining { animation: resource-gain .7s cubic-bezier(.2,.9,.25,1); }
+.legend-item.is-spending { animation: resource-spend .62s cubic-bezier(.2,.8,.25,1); }
+.resource-delta {
+  position: absolute;
+  right: 5px;
+  top: -12px;
+  z-index: 9;
+  min-width: 30px;
+  padding: 2px 5px;
+  color: #25251f;
+  background: #f4db83;
+  border: 1px solid currentColor;
+  box-shadow: 2px 3px 0 rgba(20, 20, 16, .25);
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: resource-delta .82s ease forwards;
+}
+.resource-delta.spend { color: #f7e8bc; background: #8e352b; }
 
 .board-frame {
   width: 100%;
@@ -593,6 +615,8 @@ button:focus-visible {
 .turret::after { content: ""; position: absolute; width: 11px; height: 11px; border: 3px solid #a67925; border-radius: 50%; left: 12px; top: 8px; }
 .turret i { position: absolute; width: 30px; height: 4px; background: #a67925; left: 14px; top: 12px; transform: rotate(85deg); }
 .fortress.is-firing .turret { animation: recoil .18s ease; }
+.fortress.is-ember-firing .turret { filter: drop-shadow(0 0 8px #ff8a3d) brightness(1.35); }
+.fortress.is-ember-firing .turret::before { background: #774126; box-shadow: 0 0 12px #ff7a35; }
 .fortress.is-hit { animation: fortress-hit .3s ease; }
 .wall-blocks { position: absolute; left: 0; bottom: 0; width: 100%; height: 29%; display: flex; align-items: flex-end; }
 .wall-blocks i { display: block; width: 37%; height: 70%; background: #55574b; border: 2px solid #272820; }
@@ -650,6 +674,8 @@ button:focus-visible {
 .projectile::before { content: ""; position: absolute; right: -3px; top: -3px; border-left: 7px solid #ffe798; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .projectile.is-volley-secondary { width: 19px; height: 2px; background: #ffe59a; box-shadow: 0 0 9px #f4c84f; }
 .projectile.is-volley-secondary::before { top: -3px; border-left-color: #fff0bd; }
+.projectile.is-ember-charged { height: 5px; background: #ff8a3d; box-shadow: 0 0 5px #fff1a8, 0 0 16px #ef5b29; }
+.projectile.is-ember-charged::before { border-left-color: #fff0a3; }
 .projectile.is-blast { height: 4px; background: #ff7047; box-shadow: 0 0 10px #ff4d2b; }.projectile.is-frost { background: #8ee8f5; box-shadow: 0 0 10px #73dff2; }.projectile.is-shatter { background: #a7dc79; box-shadow: 0 0 10px #7fc95d; }
 .impact-flash { position: absolute; width: 8px; height: 8px; transform: translate(-50%, -50%); border: 2px solid #ffe29a; border-radius: 50%; box-shadow: 0 0 13px #f7b94a; animation: impact-ring .52s ease-out forwards; }
 .impact-flash i { position: absolute; left: 50%; top: 50%; width: 16px; height: 2px; background: #ffe7a8; transform-origin: left; }
@@ -709,6 +735,8 @@ button:focus-visible {
 .arsenal-heading h3 { font-size: 18px; }
 .forge-meter-wrap { width: min(230px, 45%); }
 .forge-meter-wrap > span { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; color: #716d5d; }
+.forge-rule { grid-column: 1 / -1; display: block; color: #716b59; font-size: 14px; line-height: 1.2; text-align: right; white-space: nowrap; }
+.forge-meter-wrap.is-gaining .forge-track { animation: forge-gain .65s cubic-bezier(.2,.85,.24,1); }
 .forge-track { height: 6px; background: #9c947b; box-shadow: none; border-color: #65604f; }
 .forge-track > span { width: 0; background: linear-gradient(90deg, #9c5c25, #e5b743); }
 .upgrade-strategy { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin: 0 0 10px; padding: 7px 8px; background: rgba(71,69,57,.08); border: 1px solid rgba(101,96,79,.35); }
@@ -821,6 +849,9 @@ button:focus-visible {
 @keyframes rune-spark { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(0); } 18% { opacity: 1; } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.2) rotate(210deg); } }
 @keyframes cascade-callout { 0% { opacity: 0; transform: translate(-50%,-50%) scaleX(.25) rotate(-2deg); } 18%,70% { opacity: 1; transform: translate(-50%,-50%) scaleX(1) rotate(-2deg); } 100% { opacity: 0; transform: translate(-50%,-62%) scale(.96) rotate(-2deg); } }
 @keyframes resource-gain { 25% { color: var(--cream); transform: translateY(-4px) scale(1.06); filter: brightness(1.45); box-shadow: 0 6px 0 currentColor, 0 0 18px currentColor; } }
+@keyframes resource-spend { 28% { transform: translateY(2px) scale(.94); filter: brightness(1.35); box-shadow: inset 0 0 0 2px currentColor; } }
+@keyframes resource-delta { 0% { opacity: 0; transform: translateY(7px) scale(.75); } 18%, 68% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-15px) scale(.92); } }
+@keyframes forge-gain { 35% { filter: brightness(1.55); transform: scaleY(1.8); box-shadow: 0 0 12px #d8a837; } }
 @keyframes tile-shake { 25% { transform: translateX(-5px); } 55% { transform: translateX(5px); } 80% { transform: translateX(-3px); } }
 @keyframes flag { to { transform: scaleX(.78) skewY(-4deg); } }
 @keyframes recoil { 40% { transform: rotate(var(--aim-angle, -.08rad)) translateX(-7px); } }

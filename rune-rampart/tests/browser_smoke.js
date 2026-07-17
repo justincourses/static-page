@@ -102,19 +102,31 @@ let activeBrowser;
   if (await page.locator('#difficultyValue').innerText() !== '老兵') throw new Error('Selected difficulty was not applied');
   if (await page.locator('#fullscreenButton').getAttribute('aria-label') !== '进入全屏') throw new Error('Fullscreen control is not ready');
   if (await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound should start enabled');
+  if (!await page.locator('.forge-rule').innerText().then((text) => text.includes('每组 +1') && text.includes('五连 +2') && text.includes('铸币组 +1'))) throw new Error('Reinforcement rules are not explained in the upgrade HUD');
+  const reinforcementRules = await page.evaluate(() => {
+    const reward = window.__runeRampartTest.reinforcementReward;
+    return {
+      normal: reward([{ type: 'ember', length: 3 }]),
+      four: reward([{ type: 'mana', length: 4 }]),
+      five: reward([{ type: 'moss', length: 5 }]),
+      coin: reward([{ type: 'coin', length: 3 }])
+    };
+  });
+  if (reinforcementRules.normal.total !== 1 || reinforcementRules.four.total !== 2 || reinforcementRules.five.total !== 3 || reinforcementRules.coin.total !== 2) throw new Error(`Reinforcement rules are inconsistent: ${JSON.stringify(reinforcementRules)}`);
   await page.locator('#soundButton').click();
   if (!await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound mute toggle failed');
   await page.locator('#soundButton').click();
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
 
   await page.locator('[data-upgrade="weapon"]').click();
-  await page.evaluate(() => window.__runeRampartTest.grantForge(16));
+  await page.evaluate(() => window.__runeRampartTest.grantForge());
   await page.locator('.loadout-stat.is-upgraded').waitFor({ state: 'visible', timeout: 800 });
   await page.locator('#equipmentUpgradeBanner.is-visible').waitFor({ state: 'visible', timeout: 800 });
   const equipmentLevelTotal = await page.locator('#weaponLevel, #armorLevel, #charmLevel').evaluateAll(
     (nodes) => nodes.reduce((total, node) => total + Number(node.textContent), 0)
   );
   if (equipmentLevelTotal !== 4 || await page.locator('#weaponLevel').innerText() !== '2') throw new Error(`Attack-priority upgrade did not apply: ${equipmentLevelTotal}`);
+  if (!await page.locator('#upgradeEquipmentLevel').innerText().then((text) => text.includes('消耗 26 补强'))) throw new Error('Upgrade banner does not explain reinforcement consumption');
   const loadoutParent = await page.locator('#weaponCard').evaluate((node) => node.parentElement?.parentElement?.className);
   if (!loadoutParent?.includes('compact-arsenal')) throw new Error('Full weapon values are not grouped below the upgrade console');
   const weaponPower = (await page.locator('#weaponStat').innerText()).match(/\d+/)?.[0];
@@ -161,11 +173,19 @@ let activeBrowser;
 
   const burstResult = await page.evaluate(() => {
     window.__runeRampartTest.setEquipment('charm', 4);
+    window.__runeRampartTest.setEmberCharges(2);
     const before = document.querySelectorAll('.projectile').length;
     const burst = window.__runeRampartTest.fireBurst();
-    return { ...burst, projectilesAdded: document.querySelectorAll('.projectile').length - before };
+    return {
+      ...burst,
+      projectilesAdded: document.querySelectorAll('.projectile').length - before,
+      emberProjectiles: document.querySelectorAll('.projectile.is-ember-charged').length,
+      emberHud: document.querySelector('#emberValue').textContent,
+      spendFeedback: document.querySelector('.legend-item.ember .resource-delta.spend')?.textContent
+    };
   });
   if (burstResult.volleySize !== 2 || burstResult.projectilesAdded < 2) throw new Error(`Attack-speed multishot did not render: ${JSON.stringify(burstResult)}`);
+  if (!burstResult.emberCharged || burstResult.emberCharges !== 1 || burstResult.emberProjectiles < 2 || burstResult.emberHud !== '1' || burstResult.spendFeedback !== '-1') throw new Error(`Ember gain/consumption is not perceptible: ${JSON.stringify(burstResult)}`);
   await page.screenshot({ path: path.join(output, 'multishot.png'), fullPage: false });
 
   const beforeScore = Number(await page.locator('#scoreValue').innerText());
@@ -178,10 +198,12 @@ let activeBrowser;
   const relicIndex = futureMatches.find((index) => index !== first && index !== second)
     ?? (futureMatches[0] === first ? second : futureMatches[0] === second ? first : futureMatches[0]);
   await page.evaluate(({ relicIndex }) => {
+    window.__runeRampartTest.clearRelics();
     window.__runeRampartTest.clearRuneRelics();
     window.__runeRampartTest.setRuneRelic(relicIndex, 'frost');
   }, { relicIndex });
   if (await page.locator('.rune-relic-mark').count() !== 1) throw new Error('Forced rune Easter egg marker did not render');
+  const beforeMatchResources = await page.evaluate(() => window.__runeRampartTest.snapshot());
   await page.locator('.rune-tile').nth(first).click();
   await page.locator('.rune-tile').nth(second).click();
   await page.locator('.match-primed').first().waitFor({ state: 'visible', timeout: 700 });
@@ -192,12 +214,21 @@ let activeBrowser;
   await page.screenshot({ path: path.join(output, 'animation-burst.png'), fullPage: false });
   await page.locator('.is-dropping').first().waitFor({ state: 'attached', timeout: 900 });
   await page.waitForTimeout(190);
+  const reinforcementFeedback = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    delta: document.querySelector('.legend-item.coin .resource-delta.gain')?.textContent
+  }));
+  if (!(reinforcementFeedback.snapshot.forge > beforeMatchResources.forge) || !reinforcementFeedback.delta?.startsWith('+')) throw new Error(`Every match does not visibly advance reinforcement: ${JSON.stringify(reinforcementFeedback)}`);
   await page.screenshot({ path: path.join(output, 'animation-drop.png'), fullPage: false });
   await page.waitForTimeout(700);
   const afterScore = Number(await page.locator('#scoreValue').innerText());
   if (!(afterScore > beforeScore)) throw new Error(`Match did not score: ${beforeScore} -> ${afterScore}`);
-  await page.locator('.combat-buff.frost').waitFor({ state: 'visible', timeout: 800 });
+  const boardRelicResult = await page.evaluate(() => window.__runeRampartTest.snapshot());
+  const boardRelicTypes = [boardRelicResult.combatBuff?.type, ...boardRelicResult.combatBuffQueue.map((buff) => buff.type)];
+  if (!boardRelicTypes.includes('frost')) throw new Error(`Matched rune Easter egg did not enter the effect queue: ${JSON.stringify(boardRelicResult)}`);
   await page.evaluate(() => {
+    window.__runeRampartTest.clearRelics();
+    window.__runeRampartTest.grantRelic('frost');
     window.__runeRampartTest.grantRelic('shatter');
     window.__runeRampartTest.grantRelic('blast');
   });
@@ -215,6 +246,17 @@ let activeBrowser;
   const advancedRelics = await page.evaluate(() => window.__runeRampartTest.snapshot());
   if (advancedRelics.combatBuff?.type !== 'shatter' || advancedRelics.combatBuffQueue.length !== 1) throw new Error(`Relic queue did not advance after effect exhaustion: ${JSON.stringify(advancedRelics)}`);
   await page.evaluate(() => window.__runeRampartTest.clearRelics());
+  const manaSpend = await page.evaluate(() => {
+    window.__runeRampartTest.grantMana(18);
+    return window.__runeRampartTest.snapshot().mana;
+  });
+  await page.locator('#volleyButton').click();
+  await page.locator('.arcane-wave').waitFor({ state: 'attached', timeout: 500 });
+  const manaAfterVolley = await page.evaluate(() => ({
+    mana: window.__runeRampartTest.snapshot().mana,
+    feedback: document.querySelector('.legend-item.mana .resource-delta.spend')?.textContent
+  }));
+  if (manaAfterVolley.mana !== manaSpend - 18 || manaAfterVolley.feedback !== '-18') throw new Error(`Mana consumption is not perceptible: ${JSON.stringify({ manaSpend, manaAfterVolley })}`);
 
   await page.waitForTimeout(1500);
   if (await page.locator('.enemy').count() < 1) throw new Error('No enemy spawned');
@@ -233,7 +275,10 @@ let activeBrowser;
   if ((await page.locator('.enemy-label').first().innerText()).length < 3) throw new Error('Enemy name is missing');
   const aimAngle = await page.locator('#fortress').evaluate((node) => node.style.getPropertyValue('--aim-angle'));
   if (!aimAngle.includes('rad')) throw new Error('Turret did not aim at its target');
-  await page.evaluate(() => window.__runeRampartTest.grantRelic('blast'));
+  await page.evaluate(() => {
+    window.__runeRampartTest.clearRelics();
+    window.__runeRampartTest.grantRelic('blast');
+  });
   await page.locator('.combat-buff.blast').waitFor({ state: 'visible', timeout: 500 });
   await page.locator('.impact-flash.blast').first().waitFor({ state: 'attached', timeout: 1800 });
   await page.screenshot({ path: path.join(output, 'enemy-dossier.png'), fullPage: false });

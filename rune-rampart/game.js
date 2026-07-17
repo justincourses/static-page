@@ -5,6 +5,11 @@
   const COLS = 7;
   const MAX_WAVES = 100;
   const SECONDARY_BOLT_POWER = .45;
+  const EMBER_CHARGE_CAP = 24;
+  const EMBER_DAMAGE_MULTIPLIER = 1.25;
+  const FORGE_START = 26;
+  const FORGE_STEP = 3;
+  const FORGE_MAX = 56;
   const TYPES = ['ember', 'mana', 'moss', 'coin'];
   const SYMBOLS = { ember: '◆', mana: '✦', moss: '⬟', coin: '●' };
   const TYPE_NAMES = { ember: '红曜石', mana: '蓝晶', moss: '绿晶', coin: '铸币' };
@@ -146,8 +151,8 @@
 
   const state = {
     board: [], boardRelics: [], selected: null, locked: false, started: false, paused: true, gameOver: false,
-    score: 0, kills: 0, wave: 1, might: 0, mana: 0, repaired: 0,
-    forge: 0, forgeTarget: 16, equipment: { weapon: 1, armor: 1, charm: 1 },
+    score: 0, kills: 0, wave: 1, emberCharges: 0, mana: 0, repaired: 0,
+    forge: 0, forgeTarget: FORGE_START, equipment: { weapon: 1, armor: 1, charm: 1 },
     upgradeMode: 'auto', autoUpgradeIndex: 0, selectedDifficulty: 'rookie', difficulty: 'rookie',
     wall: 1120, wallMax: 1120, combo: 1, enemies: [], enemyId: 0,
     waveQueue: 0, waveTotal: 0, waveSpawned: 0, waveBossesRemaining: 0,
@@ -195,31 +200,31 @@
     };
   }
 
-  // Deterministic balance model used by the browser regression suite. The 1.22
-  // combat factor represents ideal crit, volley and relic usage rather than free DPS.
+  // Deterministic balance model used by the browser regression suite. Every
+  // successful group grants base reinforcement progress; coin and long groups
+  // average another 35%. Ember charges amplify a portion of normal volleys.
   function simulateBalance(difficultyKey = 'master', efficiency = 1) {
-    let might = 0;
     let forge = 0;
-    let forgeTarget = 16;
+    let forgeTarget = FORGE_START;
     const equipment = { weapon: 1, armor: 1, charm: 1 };
     let firstFailure = null;
     let minimumMargin = Infinity;
 
     for (let wave = 1; wave <= MAX_WAVES; wave += 1) {
       const profile = getWaveProfile(wave, difficultyKey);
-      might += profile.requiredGroups * .75 * efficiency;
-      forge += profile.requiredGroups * .75 * efficiency;
+      forge += profile.requiredGroups * 1.35 * efficiency;
       while (forge >= forgeTarget) {
         forge -= forgeTarget;
         const weakest = ['weapon', 'armor', 'charm'].reduce((slot, candidate) => (
           equipment[candidate] < equipment[slot] ? candidate : slot
         ), 'weapon');
         equipment[weakest] += 1;
-        forgeTarget = Math.min(38, forgeTarget + 2);
+        forgeTarget = Math.min(FORGE_MAX, forgeTarget + FORGE_STEP);
       }
 
-      const power = 17 + might * 1.15 + equipment.weapon * 8 + equipment.charm * 2;
+      const power = weaponPower(equipment.weapon);
       const rate = 1000 / Math.max(220, 1050 - equipment.charm * 80);
+      const emberFactor = 1 + (EMBER_DAMAGE_MULTIPLIER - 1) * .55 * efficiency;
       const averageHp = 80 * (1 - profile.advancedChance) + 102 * profile.advancedChance;
       const averageDefense = 3 * (1 - profile.advancedChance) + 5.3 * profile.advancedChance;
       const regularCount = profile.enemyCount - profile.bossCount;
@@ -227,7 +232,7 @@
       const bossDurability = profile.bossCount * 780 * profile.hpScale * (1 + 20 * profile.defenseScale * .02);
       const activeSeconds = Math.ceil(profile.enemyCount / profile.batchSize) * profile.spawnInterval / 1000
         + 85 / (3 * profile.speedScale);
-      const idealOutput = power * rate * activeSeconds * 1.22 * efficiency;
+      const idealOutput = power * rate * activeSeconds * 1.22 * emberFactor * efficiency;
       const margin = idealOutput / (regularDurability + bossDurability);
       minimumMargin = Math.min(minimumMargin, margin);
       if (margin < 1 && firstFailure === null) firstFailure = wave;
@@ -313,8 +318,8 @@
     return matches;
   }
 
-  function countMatchGroups() {
-    let groups = 0;
+  function findMatchGroups() {
+    const groups = [];
     for (let row = 0; row < ROWS; row += 1) {
       let run = 1;
       for (let col = 1; col <= COLS; col += 1) {
@@ -322,7 +327,7 @@
         const previous = state.board[indexOf(row, col - 1)];
         if (current && current === previous) run += 1;
         else {
-          if (previous && run >= 3) groups += 1;
+          if (previous && run >= 3) groups.push({ type: previous, length: run });
           run = 1;
         }
       }
@@ -334,12 +339,16 @@
         const previous = state.board[indexOf(row - 1, col)];
         if (current && current === previous) run += 1;
         else {
-          if (previous && run >= 3) groups += 1;
+          if (previous && run >= 3) groups.push({ type: previous, length: run });
           run = 1;
         }
       }
     }
     return groups;
+  }
+
+  function countMatchGroups() {
+    return findMatchGroups().length;
   }
 
   function hasPossibleMove() {
@@ -416,7 +425,8 @@
       state.combo = chain;
       updateCombo();
       const counts = { ember: 0, mana: 0, moss: 0, coin: 0 };
-      const groupCount = countMatchGroups();
+      const matchGroups = findMatchGroups();
+      const groupCount = matchGroups.length;
       const matchedRelics = [...matches].map((index) => state.boardRelics[index]).filter(Boolean);
       matches.forEach((index) => { counts[state.board[index]] += 1; });
 
@@ -438,7 +448,7 @@
       await wait(470);
       if (sessionId !== state.sessionId) return;
 
-      applyRewards(counts, chain, groupCount);
+      applyRewards(counts, chain, matchGroups);
       matchedRelics.forEach((type) => activateRelic(type, 'board'));
       matches.forEach((index) => {
         state.board[index] = null;
@@ -513,48 +523,85 @@
     }
   }
 
-  function applyRewards(counts, chain, groupCount = 1) {
+  function pulseResource(type, text, mode = 'gain') {
+    const legend = $(`.legend-item.${type}`);
+    if (!legend) return;
+    legend.classList.remove('is-gaining', 'is-spending');
+    void legend.offsetWidth;
+    legend.classList.add(mode === 'spend' ? 'is-spending' : 'is-gaining');
+    const delta = document.createElement('em');
+    delta.className = `resource-delta ${mode}`;
+    delta.textContent = text;
+    legend.appendChild(delta);
+    setTimeout(() => {
+      delta.remove();
+      legend.classList.remove('is-gaining', 'is-spending');
+    }, 850);
+  }
+
+  function pulseForgeMeter() {
+    const meter = $('.forge-meter-wrap');
+    meter.classList.remove('is-gaining');
+    void meter.offsetWidth;
+    meter.classList.add('is-gaining');
+    setTimeout(() => meter.classList.remove('is-gaining'), 700);
+  }
+
+  function reinforcementReward(groups) {
+    const base = groups.length;
+    const longBonus = groups.reduce((sum, group) => sum + (group.length >= 5 ? 2 : group.length === 4 ? 1 : 0), 0);
+    const coinBonus = groups.filter((group) => group.type === 'coin').length;
+    return { base, longBonus, coinBonus, total: base + longBonus + coinBonus };
+  }
+
+  function applyRewards(counts, chain, matchGroups = []) {
     const multiplier = 1 + (chain - 1) * 0.6;
+    const groupCount = matchGroups.length;
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
     state.waveMatches += groupCount;
     state.totalMatches += groupCount;
     state.score += Math.round(total * 12 * multiplier);
     if (counts.ember) {
-      const gain = Math.round(counts.ember * multiplier);
-      state.might += gain;
-      showCombatToast(`战力 +${gain}`, 'damage', 26, 32);
+      const previous = state.emberCharges;
+      state.emberCharges = Math.min(EMBER_CHARGE_CAP, state.emberCharges + counts.ember);
+      const gain = state.emberCharges - previous;
+      pulseResource('ember', gain ? `+${gain}` : '已满');
+      showCombatToast(gain ? `余烬 +${gain}` : '余烬已满', 'damage', 26, 32);
     }
     if (counts.mana) {
       const gain = Math.round(counts.mana * 2 * multiplier);
+      const previous = state.mana;
       state.mana = Math.min(99, state.mana + gain);
-      showCombatToast(`奥能 +${gain}`, 'mana', 39, 24);
+      const accepted = state.mana - previous;
+      pulseResource('mana', accepted ? `+${accepted}` : '已满');
+      showCombatToast(accepted ? `奥能 +${accepted}` : '奥能已满', 'mana', 39, 24);
     }
     if (counts.moss) {
       const repair = Math.round(counts.moss * 14 * multiplier);
-      state.repaired += repair;
-      state.wall = Math.min(state.wallMax, state.wall + repair);
-      showCombatToast(`修复 +${repair}`, 'repair', 20, 53);
+      const accepted = Math.max(0, Math.min(repair, state.wallMax - state.wall));
+      state.repaired += accepted;
+      state.wall += accepted;
+      pulseResource('moss', accepted ? `+${accepted}` : '已满');
+      showCombatToast(accepted ? `城墙 +${accepted}` : '城墙已满', 'repair', 20, 53);
     }
-    if (counts.coin) {
-      const gain = Math.round(counts.coin * multiplier);
-      state.forge += gain;
-      showCombatToast(`锻造 +${gain}`, 'forge', 73, 32);
-      checkForge();
+    const reinforcement = reinforcementReward(matchGroups);
+    state.forge += reinforcement.total;
+    pulseResource('coin', `+${reinforcement.total}`);
+    pulseForgeMeter();
+    showCombatToast(`补强 +${reinforcement.total}`, 'forge', 73, 32);
+    if (reinforcement.longBonus || reinforcement.coinBonus) {
+      const bonuses = [reinforcement.longBonus ? `长连 +${reinforcement.longBonus}` : '', reinforcement.coinBonus ? `铸币 +${reinforcement.coinBonus}` : ''].filter(Boolean).join('、');
+      addLog(`补强 +${reinforcement.total}（基础 ${reinforcement.base}，${bonuses}）`);
     }
-    TYPES.forEach((type) => {
-      if (!counts[type]) return;
-      const legend = $(`.legend-item.${type}`);
-      legend.classList.remove('is-gaining');
-      void legend.offsetWidth;
-      legend.classList.add('is-gaining');
-    });
-    if (chain > 1) addLog(`${chain} 连锁！符文收益提升 ${Math.round((multiplier - 1) * 100)}%`);
+    checkForge();
+    if (chain > 1) addLog(`${chain} 连锁！奥能、修复与军功收益提升 ${Math.round((multiplier - 1) * 100)}%`);
     updateUI();
   }
 
   function checkForge() {
     while (state.forge >= state.forgeTarget) {
-      state.forge -= state.forgeTarget;
+      const cost = state.forgeTarget;
+      state.forge -= cost;
       const slots = ['weapon', 'armor', 'charm'];
       let slot = state.upgradeMode;
       if (slot === 'auto') {
@@ -564,18 +611,19 @@
         state.autoUpgradeIndex += 1;
       }
       state.equipment[slot] += 1;
-      state.forgeTarget = Math.min(38, state.forgeTarget + 2);
+      state.forgeTarget = Math.min(FORGE_MAX, state.forgeTarget + FORGE_STEP);
       if (slot === 'armor') {
         state.wallMax += 90;
         state.wall = Math.min(state.wallMax, state.wall + 90);
       }
-      addLog(`${equipmentName(slot)}锻造完成，已按${state.upgradeMode === 'auto' ? '自动策略' : '优先策略'}装备`);
+      addLog(`消耗 ${cost} 点补强，${equipmentName(slot)}已按${state.upgradeMode === 'auto' ? '自动策略' : '优先策略'}升级`);
       showCombatToast('装备升级！', 'forge', 53, 48);
-      celebrateEquipmentUpgrade(slot);
+      setTimeout(() => pulseResource('coin', `-${cost}`, 'spend'), 180);
+      celebrateEquipmentUpgrade(slot, cost);
     }
   }
 
-  function celebrateEquipmentUpgrade(slot) {
+  function celebrateEquipmentUpgrade(slot, cost) {
     const level = state.equipment[slot];
     const card = $(`#${slot}Card`);
     const banner = els.upgradeBanner;
@@ -588,7 +636,7 @@
     updateFieldHud();
 
     $('#upgradeEquipmentName').textContent = equipmentName(slot);
-    $('#upgradeEquipmentLevel').textContent = `LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}`;
+    $('#upgradeEquipmentLevel').textContent = `消耗 ${cost} 补强 · LV.${level} · ${state.upgradeMode === 'auto' ? '自动补强' : '优先升级'}`;
     banner.classList.remove('is-visible');
     card.classList.remove('is-upgraded');
     void banner.offsetWidth;
@@ -624,8 +672,15 @@
     return names[Math.min(state.equipment[slot] - 1, names.length - 1)];
   }
 
+  function weaponPower(level) {
+    const steps = Math.max(0, Math.floor(level) - 1);
+    const scaledSteps = Math.min(19, steps);
+    const overflow = Math.max(0, steps - scaledSteps);
+    return Math.round(27 + 50 * scaledSteps * (1.07 ** scaledSteps) + overflow * 260);
+  }
+
   function totalPower() {
-    return Math.round(17 + state.might * 1.15 + state.equipment.weapon * 8 + state.equipment.charm * 2);
+    return weaponPower(state.equipment.weapon);
   }
 
   function baseAttackDelay() {
@@ -710,7 +765,7 @@
     $('#waveValue').textContent = String(state.wave).padStart(3, '0');
     $('#killValue').textContent = String(state.kills).padStart(3, '0');
     $('#scoreValue').textContent = String(state.score).padStart(5, '0');
-    $('#mightValue').textContent = state.might;
+    $('#emberValue').textContent = state.emberCharges;
     $('#manaValue').textContent = state.mana;
     $('#repairValue').textContent = state.repaired;
     $('#forgeValue').textContent = state.forge;
@@ -879,20 +934,30 @@
     if (!enemy || enemy.hp <= 0) return;
     state.attackReadyAt = now + attackDelay();
     const shots = volleySize();
+    const emberCharged = state.emberCharges > 0;
+    if (emberCharged) {
+      state.emberCharges -= 1;
+      pulseResource('ember', '-1', 'spend');
+      showCombatToast('余烬齐射 ×1.25', 'damage', 24, 38);
+      updateUI();
+    }
     const targets = [...state.enemies].sort((first, second) => first.x - second.x);
     els.fortress.classList.add('is-firing');
+    els.fortress.classList.toggle('is-ember-firing', emberCharged);
     setTimeout(() => els.fortress.classList.remove('is-firing'), 190);
+    if (emberCharged) setTimeout(() => els.fortress.classList.remove('is-ember-firing'), 240);
 
     for (let index = 0; index < shots; index += 1) {
       const target = targets[Math.min(index, targets.length - 1)] || enemy;
       const crit = Math.random() < .05 + state.equipment.charm * .012;
       const powerScale = index === 0 ? 1 : SECONDARY_BOLT_POWER;
-      const damage = Math.round(totalPower() * powerScale * (crit ? 1.85 : 1));
-      launchProjectile(target, damage, crit, now, index, shots);
+      const damage = Math.round(totalPower() * powerScale * (emberCharged ? EMBER_DAMAGE_MULTIPLIER : 1) * (crit ? 1.85 : 1));
+      launchProjectile(target, damage, crit, now, index, shots, emberCharged);
     }
+    return { shots, emberCharged };
   }
 
-  function launchProjectile(enemy, damage, crit, now, shotIndex = 0, shotCount = 1) {
+  function launchProjectile(enemy, damage, crit, now, shotIndex = 0, shotCount = 1, emberCharged = false) {
     sound.tone(690 + shotIndex * 42 + Math.random() * 60, .055, 'sawtooth', .012);
     const fieldRect = els.battlefield.getBoundingClientRect();
     const startX = fieldRect.width * .19;
@@ -908,7 +973,7 @@
     const dx = endX - startX;
     const dy = endY - startY;
     const projectile = document.createElement('i');
-    projectile.className = `projectile${shotIndex > 0 ? ' is-volley-secondary' : ''}${state.combatBuff ? ` is-${state.combatBuff.type}` : ''}`;
+    projectile.className = `projectile${shotIndex > 0 ? ' is-volley-secondary' : ''}${emberCharged ? ' is-ember-charged' : ''}${state.combatBuff ? ` is-${state.combatBuff.type}` : ''}`;
     projectile.dataset.volley = `${shotIndex + 1}/${shotCount}`;
     projectile.style.left = `${startX}px`;
     projectile.style.top = `${startY}px`;
@@ -1026,8 +1091,11 @@
     if (enemy.relic) activateRelic(enemy.relic);
     if (enemy.type === 'boss') {
       state.forge += 8;
+      pulseResource('coin', '+8');
+      pulseForgeMeter();
+      showCombatToast('Boss 补强 +8', 'forge', enemy.x, enemy.y);
       checkForge();
-      addLog('攻城巨兽倒下，缴获大量锻造材料');
+      addLog('攻城巨兽倒下，获得 8 点额外补强');
     }
     updateUI();
   }
@@ -1053,6 +1121,8 @@
   function castVolley() {
     if (state.mana < 18 || state.paused || state.gameOver) return;
     state.mana -= 18;
+    pulseResource('mana', '-18', 'spend');
+    showCombatToast('奥能 -18', 'mana', 39, 24);
     sound.tone(220, .35, 'sine', .045);
     sound.tone(440, .38, 'triangle', .04, .08);
     sound.tone(660, .42, 'sine', .035, .16);
@@ -1060,7 +1130,7 @@
     wave.className = 'arcane-wave';
     els.battlefield.appendChild(wave);
     setTimeout(() => wave.remove(), 600);
-    const damage = Math.round(42 + state.might * .7 + state.equipment.weapon * 8);
+    const damage = Math.round(42 + totalPower() * .65);
     [...state.enemies].forEach((enemy) => damageEnemy(enemy, damage, false, { secondary: true, effect: 'arcane' }));
     addLog(`奥术齐射覆盖战场，每个目标受到 ${damage} 点伤害`);
     updateUI();
@@ -1149,8 +1219,8 @@
     state.sessionId += 1;
     state.selected = null; state.locked = false; state.started = true; state.paused = false; state.gameOver = false;
     state.difficulty = state.selectedDifficulty;
-    state.score = 0; state.kills = 0; state.wave = 1; state.might = 0; state.mana = 0; state.repaired = 0;
-    state.forge = 0; state.forgeTarget = 16; state.equipment = { weapon: 1, armor: 1, charm: 1 };
+    state.score = 0; state.kills = 0; state.wave = 1; state.emberCharges = 0; state.mana = 0; state.repaired = 0;
+    state.forge = 0; state.forgeTarget = FORGE_START; state.equipment = { weapon: 1, armor: 1, charm: 1 };
     state.upgradeMode = 'auto'; state.autoUpgradeIndex = 0; state.combatBuff = null; state.combatBuffQueue = [];
     state.wallMax = 1120; state.wall = 1120; state.combo = 1; state.enemyId = 0;
     state.waveQueue = 0; state.waveTotal = 0; state.waveSpawned = 0; state.waveBossesRemaining = 0;
@@ -1300,6 +1370,17 @@
         checkForge();
         updateUI();
       },
+      setEmberCharges(amount = 0) {
+        state.emberCharges = Math.max(0, Math.min(EMBER_CHARGE_CAP, Math.floor(Number(amount) || 0)));
+        updateUI();
+      },
+      grantMana(amount = 18) {
+        state.mana = Math.min(99, state.mana + Math.max(0, Math.floor(Number(amount) || 18)));
+        updateUI();
+      },
+      reinforcementReward(groups = []) {
+        return reinforcementReward(groups);
+      },
       grantRelic(type = 'blast') {
         activateRelic(RELICS[type] ? type : 'blast');
         updateUI();
@@ -1346,8 +1427,8 @@
           spawnEnemy('boss', null);
           [target] = state.enemies;
         }
-        fireAt(target, performance.now());
-        return { volleySize: volleySize(), attackRate: attackRate() };
+        const volley = fireAt(target, performance.now());
+        return { volleySize: volleySize(), attackRate: attackRate(), ...volley, emberCharges: state.emberCharges };
       },
       clearWave(wave = MAX_WAVES) {
         startWave(wave);
@@ -1368,6 +1449,12 @@
           combatBuff: state.combatBuff ? { ...state.combatBuff } : null,
           combatBuffQueue: state.combatBuffQueue.map((buff) => ({ ...buff })),
           runeRelics: [...state.boardRelics],
+          emberCharges: state.emberCharges,
+          mana: state.mana,
+          repaired: state.repaired,
+          forge: state.forge,
+          forgeTarget: state.forgeTarget,
+          equipment: { ...state.equipment },
           enemies: state.enemies.map(({ type, role, relic }) => ({ type, role, relic }))
         };
       }

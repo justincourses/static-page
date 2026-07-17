@@ -88,10 +88,10 @@
           </div>
 
           <div class="rune-legend" aria-label="符文效果">
-            <div class="legend-item ember"><i>◆</i><span>战力</span><strong id="mightValue">0</strong></div>
-            <div class="legend-item mana"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
-            <div class="legend-item moss"><i>⬟</i><span>修复</span><strong id="repairValue">0</strong></div>
-            <div class="legend-item coin"><i>●</i><span>锻造</span><strong id="forgeValue">0</strong></div>
+            <div class="legend-item ember" title="每枚红曜石提供 1 次余烬齐射，开火消耗 1 次"><i>◆</i><span>余烬</span><strong id="emberValue">0</strong></div>
+            <div class="legend-item mana" title="蓝晶转化为奥能；消耗 18 点发动全场齐射"><i>✦</i><span>奥能</span><strong id="manaValue">0</strong></div>
+            <div class="legend-item moss" title="绿晶立即修复城墙，此处显示本局累计有效修复"><i>⬟</i><span>修复</span><strong id="repairValue">0</strong></div>
+            <div class="legend-item coin" title="所有消除都会推进补强；铸币组额外增加 1 点"><i>●</i><span>补强</span><strong id="forgeValue">0</strong></div>
           </div>
 
           <div class="board-frame">
@@ -109,7 +109,7 @@
             <div class="board-lock" id="boardLock" aria-hidden="true"><span>战局暂停</span></div>
           </div>
 
-          <p class="board-hint"><span>拖动策略：</span>点击两枚相邻符文交换，三枚以上即可激活</p>
+          <p class="board-hint"><span>消除规则：</span>每组都推进补强；颜色决定即时收益，四连与五连提供额外补强</p>
         </section>
 
         <section class="panel battle-panel" aria-labelledby="battleTitle">
@@ -203,7 +203,7 @@
                 <small id="strategyHint">自动 · 均衡补强</small>
               </div>
               <div class="forge-meter-wrap">
-                <span>锻造进度 <b id="forgeProgressText">0 / 16</b></span>
+                <span>补强进度 <b id="forgeProgressText">0 / 26</b></span>
                 <div class="meter-track forge-track"><span id="forgeMeter"></span></div>
               </div>
               <div class="strategy-options" role="group" aria-label="选择升级优先级">
@@ -212,6 +212,7 @@
                 <button class="strategy-button" type="button" data-upgrade="armor" aria-pressed="false"><i>◇</i>防御</button>
                 <button class="strategy-button" type="button" data-upgrade="charm" aria-pressed="false"><i>»</i>攻速</button>
               </div>
+              <small class="forge-rule">补强规则：每组 +1 · 四连 +1 · 五连 +2 · 铸币组 +1</small>
             </div>
             <section class="battle-loadout" aria-label="当前军械数值">
               <article class="loadout-stat weapon-card" id="weaponCard">
@@ -273,10 +274,10 @@
         </div>
 
         <div class="briefing-rules">
-          <div><i class="ember">◆</i><span><b>红曜石</b>永久提升弩炮战力</span></div>
+          <div><i class="ember">◆</i><span><b>红曜石</b>每枚储备 1 次余烬齐射，整轮伤害 +25%</span></div>
           <div><i class="mana">✦</i><span><b>蓝晶</b>储存奥能，发动全场齐射</span></div>
           <div><i class="moss">⬟</i><span><b>绿晶</b>即时修复受损城墙</span></div>
-          <div><i class="coin">●</i><span><b>铸币</b>按升级策略锻造军械</span></div>
+          <div><i class="coin">●</i><span><b>补强</b>每组消除均推进；长连和铸币组额外增加</span></div>
         </div>
         <button class="primary-button" id="startButton" type="button"><span>以「新手」出征</span><small>开始百波挑战</small></button>
         <p class="briefing-note">战役中可从右上角重新打开此界面；确认出征将重开游戏。</p>
