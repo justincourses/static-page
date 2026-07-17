@@ -10,6 +10,8 @@
   const FORGE_START = 26;
   const FORGE_STEP = 3;
   const FORGE_MAX = 56;
+  const ENEMY_ENTRY_X = 98;
+  const TARGET_ACQUIRE_DELAY = 220;
   const SAVE_VERSION = 1;
   const STORAGE_KEYS = {
     difficulty: 'runeRampart.difficulty',
@@ -34,30 +36,59 @@
   };
   const DIFFICULTIES = {
     rookie: {
-      name: '新手', subtitle: '有压守城', pressure: .72, eliteOffset: -.26, statScale: .78,
-      groupScale: .68, batchDivisor: 6, relicChance: .16, runeRelicChance: .045, scoreScale: 1
+      name: '新手', subtitle: '稳健通关', pressure: .82, eliteOffset: -.28, eliteCap: .72,
+      statScale: .8, durabilityScale: 1.1, speedFactor: .94, groupScale: .62, batchDivisor: 7,
+      relicChance: .2, relicGrowth: .004, runeRelicChance: .06, scoreScale: 1
     },
     veteran: {
-      name: '老兵', subtitle: '烽火压境', pressure: .86, eliteOffset: -.14, statScale: .9,
-      groupScale: .84, batchDivisor: 4, relicChance: .1, runeRelicChance: .03, scoreScale: 1.35
+      name: '老兵', subtitle: '胜负分水岭', pressure: 1.1, eliteOffset: -.03, eliteCap: .93,
+      statScale: 1.08, durabilityScale: 1.35, speedFactor: 1.12, groupScale: .9, batchDivisor: 4,
+      relicChance: .07, relicGrowth: .0025, runeRelicChance: .02, scoreScale: 1.5
     },
     master: {
-      name: '大佬', subtitle: '极限登顶', pressure: 1, eliteOffset: 0, statScale: 1,
-      groupScale: 1, batchDivisor: 3, relicChance: .055, runeRelicChance: .018, scoreScale: 1.75
+      name: '大佬', subtitle: '九死一生', pressure: 1.38, eliteOffset: .16, eliteCap: .99,
+      statScale: 1.28, durabilityScale: 1.55, speedFactor: 1.28, groupScale: 1.12, batchDivisor: 2,
+      relicChance: .02, relicGrowth: .001, runeRelicChance: .006, scoreScale: 2
     }
   };
   const BASE_ENEMY_STATS = {
-    raider: { hp: 80, speed: 3, damage: 55, defense: 3, role: '荒原劫掠者 · 均衡型', roleIcon: '◆' },
-    swift: { hp: 55, speed: 5.4, damage: 38, defense: 1, role: '影袭斥候 · 速度型', roleIcon: '»' },
-    assault: { hp: 90, speed: 3.5, damage: 95, defense: 2, role: '血斧先锋 · 攻击型', roleIcon: '†' },
-    brute: { hp: 160, speed: 2, damage: 65, defense: 13, role: '披甲蛮兵 · 防御型', roleIcon: '◇' },
-    boss: { hp: 780, speed: 1.4, damage: 210, defense: 20, role: '攻城巨兽 · BOSS', roleIcon: '♛' }
+    raider: { hp: 100, speed: 3, damage: 55, defense: 3, role: '荒原劫掠者 · 均衡型', roleIcon: '◆' },
+    swift: { hp: 70, speed: 5.4, damage: 38, defense: 1, role: '影袭斥候 · 速度型', roleIcon: '»' },
+    assault: { hp: 120, speed: 3.5, damage: 95, defense: 2, role: '血斧先锋 · 攻击型', roleIcon: '†' },
+    brute: { hp: 210, speed: 2, damage: 65, defense: 13, role: '披甲蛮兵 · 防御型', roleIcon: '◇' },
+    boss: { hp: 1050, speed: 1.4, damage: 210, defense: 20, role: '攻城巨兽 · BOSS', roleIcon: '♛' }
   };
   const RELICS = {
     blast: { name: '爆裂符文', icon: '✹', description: '命中产生范围伤害', className: 'blast' },
     frost: { name: '霜缚符文', icon: '❄', description: '命中减慢敌军', className: 'frost' },
     shatter: { name: '破甲符文', icon: '⌁', description: '命中削弱防御', className: 'shatter' }
   };
+  const MUSIC_TRACKS = [
+    {
+      title: '方块疾行 · 科罗贝尼基', source: '公版俄罗斯民谣改编', bpm: 118, cycles: 3,
+      melody: [76, 71, 72, 74, 72, 71, 69, 69, 72, 76, 74, 72, 71, 71, 72, 74, 76, 72, 69, 69, null, 74, 77, 81, 79, 77, 76, 72, 76, 74, 72, 71],
+      bass: [45, null, null, null, 45, null, null, null, 41, null, null, null, 41, null, null, null, 45, null, null, null, 38, null, null, null, 41, null, null, null, 40, null, 43, null],
+      harmony: [64, null, null, null, 64, null, 60, null, 64, null, null, null, 62, null, 64, null, 64, null, 60, null, 62, null, 65, null, 67, null, 65, null, 64, null, 62, null]
+    },
+    {
+      title: '山王逼近 · 山魔王宫殿', source: '格里格公版作品改编', bpm: 132, cycles: 3,
+      melody: [71, 72, 74, 76, 74, 72, 71, 68, 71, 72, 74, 76, 74, 72, 71, null, 70, 71, 73, 75, 73, 71, 70, 67, 70, 71, 73, 75, 73, 71, 70, null],
+      bass: [40, null, 40, null, 43, null, 40, null, 40, null, 40, null, 43, null, 40, null, 39, null, 39, null, 42, null, 39, null, 39, null, 39, null, 42, null, 39, null],
+      harmony: [59, null, 60, null, 62, null, 59, null, 59, null, 60, null, 62, null, 59, null, 58, null, 59, null, 61, null, 58, null, 58, null, 59, null, 61, null, 58, null]
+    },
+    {
+      title: '极速追击 · 康康舞曲', source: '奥芬巴赫公版作品改编', bpm: 126, cycles: 3,
+      melody: [79, 79, 79, 81, 83, 81, 79, 77, 76, 76, 76, 77, 79, 77, 76, 74, 72, 72, 72, 74, 76, 74, 72, 71, 69, 69, 71, 72, 74, 76, 77, 79],
+      bass: [43, null, 43, null, 47, null, 43, null, 40, null, 40, null, 43, null, 38, null, 36, null, 36, null, 40, null, 36, null, 33, null, 35, null, 38, null, 40, null],
+      harmony: [67, null, 67, null, 71, null, 67, null, 64, null, 64, null, 67, null, 62, null, 60, null, 60, null, 64, null, 60, null, 57, null, 59, null, 62, null, 64, null]
+    },
+    {
+      title: '城垣余火 · 原创战曲', source: 'Rune Rampart 原创', bpm: 104, cycles: 3,
+      melody: [74, null, 77, 76, 74, null, 72, 69, 70, null, 74, 72, 69, null, 67, 65, 69, null, 72, 74, 77, null, 76, 72, 74, null, 72, 69, 67, null, 69, 72],
+      bass: [38, null, null, null, 38, null, 45, null, 41, null, null, null, 36, null, 43, null, 38, null, null, null, 34, null, 41, null, 36, null, null, null, 33, null, 36, null],
+      harmony: [62, null, null, null, null, null, 60, null, 58, null, null, null, 57, null, 55, null, 57, null, null, null, 62, null, 60, null, 58, null, null, null, 55, null, 57, null]
+    }
+  ];
 
   const $ = (selector) => document.querySelector(selector);
   const readStorage = (key, fallback = null) => {
@@ -225,11 +256,32 @@
     master: null,
     filter: null,
     step: 0,
+    trackIndex: 0,
+    trackCycle: 0,
+    lastAnnouncedKey: '',
     nextNoteAt: 0,
-    bpm: 104,
-    melody: [74, null, 77, 76, 74, null, 72, 69, 70, null, 74, 72, 69, null, 67, 65, 69, null, 72, 74, 77, null, 76, 72, 74, null, 72, 69, 67, null, 69, 72],
-    bass: [38, null, null, null, 38, null, 45, null, 41, null, null, null, 36, null, 43, null, 38, null, null, null, 34, null, 41, null, 36, null, null, null, 33, null, 36, null],
-    harmony: [62, null, null, null, null, null, 60, null, 58, null, null, null, 57, null, 55, null, 57, null, null, null, 62, null, 60, null, 58, null, null, null, 55, null, 57, null],
+
+    currentTrack() {
+      return MUSIC_TRACKS[this.trackIndex % MUSIC_TRACKS.length];
+    },
+
+    announceTrack() {
+      const track = this.currentTrack();
+      const key = `${state.sessionId}:${this.trackIndex}`;
+      if (state.started && this.lastAnnouncedKey !== key) {
+        this.lastAnnouncedKey = key;
+        addLog(`军乐换曲：${track.title}（${track.source}）`);
+      }
+      updateMusicButton();
+    },
+
+    advanceTrack(announce = true) {
+      this.trackIndex = (this.trackIndex + 1) % MUSIC_TRACKS.length;
+      this.step = 0;
+      this.trackCycle = 0;
+      if (announce) this.announceTrack();
+      return this.currentTrack();
+    },
 
     midiToFrequency(note) {
       return 440 * (2 ** ((note - 69) / 12));
@@ -251,14 +303,20 @@
 
     schedule() {
       if (!this.playing || !sound.context) return;
-      const stepLength = 60 / this.bpm / 2;
       while (this.nextNoteAt < sound.context.currentTime + .45) {
-        const index = this.step % this.melody.length;
-        this.playNote(this.melody[index], this.nextNoteAt, stepLength * .78, 'triangle', .018);
-        this.playNote(this.bass[index], this.nextNoteAt, stepLength * 1.65, 'square', .008);
-        this.playNote(this.harmony[index], this.nextNoteAt, stepLength * 1.25, 'sine', .006);
+        const track = this.currentTrack();
+        const stepLength = 60 / track.bpm / 2;
+        const index = this.step;
+        this.playNote(track.melody[index], this.nextNoteAt, stepLength * .78, 'triangle', .018);
+        this.playNote(track.bass[index], this.nextNoteAt, stepLength * 1.65, 'square', .008);
+        this.playNote(track.harmony[index], this.nextNoteAt, stepLength * 1.25, 'sine', .006);
         this.nextNoteAt += stepLength;
-        this.step = (this.step + 1) % this.melody.length;
+        this.step += 1;
+        if (this.step >= track.melody.length) {
+          this.step = 0;
+          this.trackCycle += 1;
+          if (this.trackCycle >= track.cycles) this.advanceTrack(true);
+        }
       }
     },
 
@@ -274,6 +332,7 @@
       this.master.connect(this.filter).connect(sound.context.destination);
       this.playing = true;
       this.nextNoteAt = sound.context.currentTime + .06;
+      this.announceTrack();
       this.schedule();
       this.timer = window.setInterval(() => this.schedule(), 100);
       updateMusicButton();
@@ -375,6 +434,8 @@
       relic: enemy.relic,
       x: enemy.x,
       y: enemy.y,
+      entered: enemy.entered,
+      acquireRemaining: enemy.entered ? Math.max(0, enemy.targetableAt - now) : 0,
       slowRemaining: Math.max(0, enemy.slowUntil - now),
       armorBreakRemaining: Math.max(0, enemy.armorBreakUntil - now)
     };
@@ -472,6 +533,8 @@
       defense: Math.round(safeNumber(savedEnemy.defense, stats.defense, 0, 1000000)),
       label: restoredName,
       relic: RELICS[savedEnemy.relic] ? savedEnemy.relic : null,
+      entered: Boolean(savedEnemy.entered) || safeNumber(savedEnemy.x, 90) <= ENEMY_ENTRY_X,
+      targetableAt: now + safeNumber(savedEnemy.acquireRemaining, TARGET_ACQUIRE_DELAY, 0, TARGET_ACQUIRE_DELAY),
       slowUntil: now + safeNumber(savedEnemy.slowRemaining, 0, 0, 6000),
       armorBreakUntil: now + safeNumber(savedEnemy.armorBreakRemaining, 0, 0, 8000),
       x: safeNumber(savedEnemy.x, 90, 15.1, 110),
@@ -566,7 +629,8 @@
     els.pauseButton.querySelector('span').textContent = 'Ⅱ';
     els.pauseButton.setAttribute('aria-label', '暂停游戏');
     addLog(`已恢复第 ${state.wave} 波本地战报，棋盘与前线状态同步完成`);
-    aimTurret(state.enemies.length ? state.enemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest) : null);
+    const restoredTargets = state.enemies.filter((enemy) => enemy.entered);
+    aimTurret(restoredTargets.length ? restoredTargets.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest) : null);
     updateUI();
     state.animationId = requestAnimationFrame(gameLoop);
     music.start();
@@ -593,16 +657,16 @@
       tier,
       stage: tier + 1,
       requiredGroups: Math.max(3, Math.ceil(baseGroups * difficulty.groupScale)),
-      enemyCount: Math.max(6, Math.round(baseCount * difficulty.pressure)),
-      advancedChance: clamp(.48 + (safeWave - 1) * .0025 + tier * .035 + difficulty.eliteOffset, .18, .94),
-      hpScale: (1 + (safeWave - 1) * .035) * (1 + tier * .08) * difficulty.statScale,
+      enemyCount: Math.max(7, Math.round(baseCount * difficulty.pressure)),
+      advancedChance: clamp(.48 + (safeWave - 1) * .0025 + tier * .035 + difficulty.eliteOffset, .18, difficulty.eliteCap),
+      hpScale: (1 + (safeWave - 1) * .035) * (1 + tier * .08) * difficulty.statScale * difficulty.durabilityScale,
       damageScale: (1 + (safeWave - 1) * .032) * (1 + tier * .13) * difficulty.statScale,
       defenseScale: (1 + (safeWave - 1) * .018) * (1 + tier * .06) * difficulty.statScale,
-      speedScale: 1 + (safeWave - 1) * .0015 + tier * .015,
+      speedScale: (1 + (safeWave - 1) * .0015 + tier * .015) * difficulty.speedFactor,
       batchSize: 1 + Math.floor(tier / difficulty.batchDivisor),
       bossCount: isBossWave ? (safeWave === MAX_WAVES ? 3 : 1 + Math.floor(tier / 5)) : 0,
       isBossWave,
-      relicChance: clamp(difficulty.relicChance + tier * .004, difficulty.relicChance, difficulty.relicChance + .04),
+      relicChance: clamp(difficulty.relicChance + tier * difficulty.relicGrowth, difficulty.relicChance, difficulty.relicChance + difficulty.relicGrowth * 10),
       runeRelicChance: difficulty.runeRelicChance,
       spawnInterval: Math.max(280, (1050 - (safeWave - 1) * 3.2 - tier * 52) / difficulty.pressure),
       intermission: Math.max(1500, 3500 - tier * 180)
@@ -634,11 +698,15 @@
       const power = weaponPower(equipment.weapon);
       const rate = 1000 / Math.max(220, 1050 - equipment.charm * 80);
       const emberFactor = 1 + (EMBER_DAMAGE_MULTIPLIER - 1) * .55 * efficiency;
-      const averageHp = 80 * (1 - profile.advancedChance) + 102 * profile.advancedChance;
-      const averageDefense = 3 * (1 - profile.advancedChance) + 5.3 * profile.advancedChance;
+      const bruteWeight = Math.min(.42, .28 + profile.tier * .014);
+      const assaultWeight = 1 - .34 - bruteWeight;
+      const advancedHp = 70 * .34 + 120 * assaultWeight + 210 * bruteWeight;
+      const advancedDefense = 1 * .34 + 2 * assaultWeight + 13 * bruteWeight;
+      const averageHp = 100 * (1 - profile.advancedChance) + advancedHp * profile.advancedChance;
+      const averageDefense = 3 * (1 - profile.advancedChance) + advancedDefense * profile.advancedChance;
       const regularCount = profile.enemyCount - profile.bossCount;
       const regularDurability = regularCount * averageHp * profile.hpScale * (1 + averageDefense * profile.defenseScale * .02);
-      const bossDurability = profile.bossCount * 780 * profile.hpScale * (1 + 20 * profile.defenseScale * .02);
+      const bossDurability = profile.bossCount * 1050 * profile.hpScale * (1 + 20 * profile.defenseScale * .02);
       const activeSeconds = Math.ceil(profile.enemyCount / profile.batchSize) * profile.spawnInterval / 1000
         + 85 / (3 * profile.speedScale);
       const idealOutput = power * rate * activeSeconds * 1.22 * emberFactor * efficiency;
@@ -1162,11 +1230,13 @@
   }
 
   function updateMusicButton() {
+    const track = music.currentTrack();
+    const action = music.enabled ? '关闭' : '开启';
     els.musicButton.classList.toggle('is-muted', !music.enabled);
     els.musicButton.classList.toggle('is-active', music.playing);
     els.musicButton.setAttribute('aria-pressed', String(music.enabled));
-    els.musicButton.setAttribute('aria-label', music.enabled ? '关闭 MIDI 配乐' : '开启 MIDI 配乐');
-    els.musicButton.setAttribute('title', music.enabled ? '关闭 MIDI 配乐' : '开启 MIDI 配乐');
+    els.musicButton.setAttribute('aria-label', `${action} MIDI 军乐曲单；当前 ${track.title}`);
+    els.musicButton.setAttribute('title', `${action} MIDI 军乐曲单 · 当前：${track.title}`);
   }
 
   function upgradeAdvice() {
@@ -1229,18 +1299,19 @@
   }
 
   function updateTargetDossier() {
-    if (!state.enemies.length) {
+    const enteredEnemies = state.enemies.filter((enemy) => enemy.entered);
+    if (!enteredEnemies.length) {
       els.targetDossier.classList.add('is-empty');
       els.targetDossier.classList.remove('is-alert');
-      $('#targetName').textContent = '前线侦察中';
-      $('#targetRole').textContent = '尚未发现敌军';
+      $('#targetName').textContent = state.enemies.length ? '目标尚在场外' : '前线侦察中';
+      $('#targetRole').textContent = state.enemies.length ? `无法锁定 · ${state.enemies.length} 个敌军正在进场` : '尚未发现敌军';
       $('#targetAttack').textContent = '—';
       $('#targetDefense').textContent = '—';
       $('#targetHealth').textContent = '—';
       $('#targetHealthMeter').style.width = '0%';
       return;
     }
-    const target = state.enemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest);
+    const target = enteredEnemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest);
     els.targetDossier.classList.remove('is-empty');
     els.targetDossier.classList.toggle('is-alert', target.type === 'boss');
     $('#targetName').textContent = target.name;
@@ -1317,7 +1388,7 @@
       speed: stats.speed * profile.speedScale,
       damage: Math.round(stats.damage * profile.damageScale),
       defense: Math.round(stats.defense * profile.defenseScale), label: name,
-      relic, slowUntil: 0, armorBreakUntil: 0,
+      relic, entered: false, targetableAt: Infinity, slowUntil: 0, armorBreakUntil: 0,
       x: 105 + Math.random() * 4, y: 60 + Math.random() * 23
     };
     enemy.el = createEnemyElement(enemy);
@@ -1327,6 +1398,7 @@
     if (scheduledBoss) state.waveBossesRemaining -= 1;
     state.waveSpawned += 1;
     updateUI();
+    return enemy;
   }
 
   function positionEnemy(enemy) {
@@ -1576,7 +1648,8 @@
     els.battlefield.appendChild(wave);
     setTimeout(() => wave.remove(), 600);
     const damage = Math.round(42 + totalPower() * .65);
-    [...state.enemies].forEach((enemy) => damageEnemy(enemy, damage, false, { secondary: true, effect: 'arcane' }));
+    state.enemies.filter((enemy) => enemy.entered)
+      .forEach((enemy) => damageEnemy(enemy, damage, false, { secondary: true, effect: 'arcane' }));
     addLog(`奥术齐射覆盖战场，每个目标受到 ${damage} 点伤害`);
     updateUI();
   }
@@ -1595,15 +1668,25 @@
       [...state.enemies].forEach((enemy) => {
         const speedScale = enemy.slowUntil > now ? .55 : 1;
         enemy.x -= enemy.speed * speedScale * delta;
+        if (!enemy.entered && enemy.x <= ENEMY_ENTRY_X) {
+          enemy.entered = true;
+          enemy.targetableAt = now + TARGET_ACQUIRE_DELAY;
+          updateUI();
+        }
         if (enemy.x <= 15) enemyBreaches(enemy);
         else positionEnemy(enemy);
       });
-      const target = state.enemies.length
-        ? state.enemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest)
+      const enteredEnemies = state.enemies.filter((enemy) => enemy.entered);
+      const target = enteredEnemies.length
+        ? enteredEnemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest)
         : null;
-      aimTurret(target);
-      if (state.enemies.length && now >= state.attackReadyAt) {
-        fireAt(target, now);
+      const targetableEnemies = enteredEnemies.filter((enemy) => now >= enemy.targetableAt);
+      const firingTarget = targetableEnemies.length
+        ? targetableEnemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest)
+        : null;
+      aimTurret(firingTarget || target);
+      if (firingTarget && now >= state.attackReadyAt) {
+        fireAt(firingTarget, now);
       }
       if (state.waveQueue === 0 && state.enemies.length === 0) {
         if (!state.intermissionUntil) {
@@ -1853,7 +1936,20 @@
         return readSavedProgress();
       },
       musicState() {
-        return { enabled: music.enabled, playing: music.playing };
+        const track = music.currentTrack();
+        return {
+          enabled: music.enabled,
+          playing: music.playing,
+          trackIndex: music.trackIndex,
+          trackTitle: track.title,
+          trackSource: track.source,
+          trackCount: MUSIC_TRACKS.length,
+          playlist: MUSIC_TRACKS.map(({ title, source }) => ({ title, source }))
+        };
+      },
+      advanceMusicTrack() {
+        const track = music.advanceTrack(true);
+        return { trackIndex: music.trackIndex, trackTitle: track.title };
       },
       grantRelic(type = 'blast') {
         activateRelic(RELICS[type] ? type : 'blast');
@@ -1878,10 +1974,29 @@
         renderCombatBuff();
         updateUI();
       },
+      clearEnemies() {
+        state.enemies.forEach((enemy) => enemy.el.remove());
+        state.enemies = [];
+        state.waveQueue = 0;
+        state.waveSpawned = state.waveTotal;
+        updateUI();
+      },
       spawnEnemy(type = 'assault', relic = null) {
         if (!ENEMY_NAMES[type]) return;
         state.waveQueue += 1;
-        spawnEnemy(type, RELICS[relic] ? relic : null);
+        const enemy = spawnEnemy(type, RELICS[relic] ? relic : null);
+        return enemy ? { id: enemy.id, hp: enemy.hp, name: enemy.name, entered: enemy.entered, x: enemy.x } : null;
+      },
+      enterAllEnemies() {
+        const now = performance.now();
+        state.enemies.forEach((enemy) => {
+          enemy.x = Math.min(enemy.x, ENEMY_ENTRY_X);
+          enemy.entered = true;
+          enemy.targetableAt = now;
+          positionEnemy(enemy);
+        });
+        updateUI();
+        return state.enemies.map(({ id, name, entered, x }) => ({ id, name, entered, x }));
       },
       waveProfile(wave, difficulty = 'master') {
         return getWaveProfile(wave, difficulty);

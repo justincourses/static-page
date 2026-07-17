@@ -593,7 +593,7 @@ button:focus-visible {
   box-shadow: 4px 5px 0 rgba(19, 20, 16, .24), inset 0 0 0 1px rgba(255,255,255,.06);
   transition: opacity .25s ease, transform .25s ease;
 }
-.target-dossier.is-empty { opacity: .62; transform: scale(.97); }
+.target-dossier.is-empty { opacity: .62; }
 .target-dossier.is-alert { border-color: #e46c50; box-shadow: 4px 5px 0 rgba(19,20,16,.3), 0 0 18px rgba(213,82,55,.2); }
 .target-identity { grid-area: identity; min-width: 0; display: grid; grid-template-rows: auto auto auto; align-content: center; }
 .target-dossier-heading { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 5px; }
@@ -904,6 +904,21 @@ button:focus-visible {
 .briefing-rules > div { display: flex; align-items: center; gap: 9px; padding: 8px; background: rgba(115,108,87,.1); border-left: 3px solid currentColor; }
 .briefing-rules i { font-size: 19px; font-style: normal; }.briefing-rules span { font-size: 14px; }.briefing-rules b { display: block; font-size: 14px; }
 .briefing-rules .ember { color: var(--red); }.briefing-rules .mana { color: var(--blue); }.briefing-rules .moss { color: var(--green); }.briefing-rules .coin { color: #ba841f; }
+.briefing-music-note {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  color: #565143;
+  background: rgba(78, 126, 117, .09);
+  border-left: 3px solid #557d76;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.briefing-music-note b { color: #315f59; white-space: nowrap; }
+.briefing-music-note span { text-align: right; }
 .primary-button { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; color: var(--cream); background: var(--red-dark); border: 1px solid #4f1510; box-shadow: inset 0 0 0 2px #a74534, 4px 4px 0 #352d25; cursor: pointer; transition: .18s ease; }
 .primary-button:hover { background: #a23a2d; transform: translate(-2px,-2px); box-shadow: inset 0 0 0 2px #bf5a45, 6px 6px 0 #352d25; }
 .primary-button span { font-weight: 900; letter-spacing: .12em; }.primary-button small { opacity: .7; }
@@ -1005,6 +1020,8 @@ button:focus-visible {
   .equipment-card { grid-template-columns: 54px 1fr; text-align: left; justify-items: initial; }
   .equipment-art { margin: 0; }
   .briefing-rules { grid-template-columns: 1fr 1fr; }
+  .briefing-music-note { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .briefing-music-note span { text-align: left; }
 }
 
 @media (max-width: 560px) and (orientation: portrait) {

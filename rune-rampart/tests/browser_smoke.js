@@ -91,6 +91,7 @@ let activeBrowser;
   const difficultyNames = await page.locator('.difficulty-card span b').allInnerTexts();
   if (difficultyNames.join('/') !== '新手/老兵/大佬') throw new Error(`Unexpected difficulty names: ${difficultyNames.join('/')}`);
   if (!await page.locator('.briefing-device-note').innerText().then((text) => text.includes('电脑端体验最佳') && text.includes('横屏'))) throw new Error('Welcome screen does not explain the recommended device orientation');
+  if (!await page.locator('.briefing-music-note').innerText().then((text) => text.includes('科罗贝尼基') && text.includes('自动循环'))) throw new Error('Welcome screen does not explain the MIDI playlist');
   await assertMinimumFont(page, 'Desktop welcome');
   await page.screenshot({ path: path.join(output, 'welcome.png'), fullPage: false });
   await page.locator('[data-difficulty="veteran"]').click();
@@ -109,6 +110,16 @@ let activeBrowser;
   if (await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound should start enabled');
   if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'true') throw new Error('MIDI music should start enabled');
   if (!await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music sequencer did not start with the battle');
+  const playlistCycle = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    const before = test.musicState();
+    const visited = [];
+    for (let index = 0; index < before.trackCount; index += 1) visited.push(test.advanceMusicTrack().trackTitle);
+    const after = test.musicState();
+    return { before, visited, after, buttonTitle: document.querySelector('#musicButton').title, log: document.querySelector('#battleLog').innerText };
+  });
+  if (playlistCycle.before.trackCount !== 4 || new Set(playlistCycle.visited).size !== 4 || playlistCycle.after.trackIndex !== playlistCycle.before.trackIndex || playlistCycle.after.trackTitle !== playlistCycle.before.trackTitle) throw new Error(`MIDI playlist does not cycle through all tracks: ${JSON.stringify(playlistCycle)}`);
+  if (!playlistCycle.before.playlist.every((track) => track.source.includes('公版') || track.source.includes('原创')) || !playlistCycle.buttonTitle.includes(playlistCycle.after.trackTitle) || !playlistCycle.log.includes('军乐换曲')) throw new Error(`MIDI playlist attribution or feedback is incomplete: ${JSON.stringify(playlistCycle)}`);
   if (!await page.locator('.forge-rule').innerText().then((text) => text.includes('每组 +1') && text.includes('五连 +2') && text.includes('铸币组 +1'))) throw new Error('Reinforcement rules are not explained in the upgrade HUD');
   const reinforcementRules = await page.evaluate(() => {
     const reward = window.__runeRampartTest.reinforcementReward;
@@ -278,6 +289,31 @@ let activeBrowser;
   }));
   if (manaAfterVolley.mana !== manaSpend - 18 || manaAfterVolley.feedback !== '-18') throw new Error(`Mana consumption is not perceptible: ${JSON.stringify({ manaSpend, manaAfterVolley })}`);
 
+  await page.locator('#pauseButton').click();
+  const offstageTargeting = await page.evaluate(() => {
+    const test = window.__runeRampartTest;
+    test.clearEnemies();
+    const spawned = test.spawnEnemy('swift');
+    return {
+      spawned,
+      dossierEmpty: document.querySelector('#targetDossier').classList.contains('is-empty'),
+      targetName: document.querySelector('#targetName').textContent,
+      targetRole: document.querySelector('#targetRole').textContent
+    };
+  });
+  if (!offstageTargeting.spawned || offstageTargeting.spawned.entered || offstageTargeting.spawned.x <= 98 || !offstageTargeting.dossierEmpty || !offstageTargeting.targetRole.includes('无法锁定')) throw new Error(`Off-stage enemy can be locked before entering the field: ${JSON.stringify(offstageTargeting)}`);
+  const enteredTargeting = await page.evaluate(() => {
+    const entered = window.__runeRampartTest.enterAllEnemies();
+    return {
+      entered,
+      dossierEmpty: document.querySelector('#targetDossier').classList.contains('is-empty'),
+      targetName: document.querySelector('#targetName').textContent,
+      targetAttack: document.querySelector('#targetAttack').textContent
+    };
+  });
+  if (!enteredTargeting.entered.every((enemy) => enemy.entered && enemy.x <= 98) || enteredTargeting.dossierEmpty || enteredTargeting.targetName !== offstageTargeting.spawned.name || Number(enteredTargeting.targetAttack) <= 0) throw new Error(`Enemy was not acquired after entering the field: ${JSON.stringify(enteredTargeting)}`);
+  await page.locator('#pauseButton').click();
+
   await page.waitForTimeout(1500);
   if (await page.locator('.enemy').count() < 1) await page.evaluate(() => window.__runeRampartTest.spawnEnemy('assault'));
   if (await page.locator('.enemy').count() < 1) throw new Error('No enemy spawned');
@@ -286,6 +322,7 @@ let activeBrowser;
     window.__runeRampartTest.spawnEnemy('assault');
     window.__runeRampartTest.spawnEnemy('brute');
     window.__runeRampartTest.spawnEnemy('boss');
+    window.__runeRampartTest.enterAllEnemies();
   });
   for (const type of ['swift', 'assault', 'brute', 'boss']) {
     if (await page.locator(`.enemy.${type}`).count() < 1) throw new Error(`Distinct ${type} enemy did not render`);
@@ -366,8 +403,11 @@ let activeBrowser;
     return {
       samples,
       masterCurve: Array.from({ length: 100 }, (_, index) => test.waveProfile(index + 1, 'master')),
-      ideal: test.simulateBalance('master', 1),
-      nearIdeal: test.simulateBalance('master', .95)
+      casualRookie: test.simulateBalance('rookie', 1.15),
+      medianVeteran: test.simulateBalance('veteran', 1.3),
+      skilledVeteran: test.simulateBalance('veteran', 1.5),
+      strongMaster: test.simulateBalance('master', 2),
+      eliteMaster: test.simulateBalance('master', 2.25)
     };
   });
   for (const sample of balance.samples) {
@@ -387,8 +427,16 @@ let activeBrowser;
   const wave10 = balance.samples.find((sample) => sample.wave === 10).master;
   const wave11 = balance.samples.find((sample) => sample.wave === 11).master;
   const wave100 = balance.samples.find((sample) => sample.wave === 100).master;
+  const wave1 = balance.samples.find((sample) => sample.wave === 1);
+  if (wave1.rookie.enemyCount < 7 || wave1.veteran.enemyCount < 10 || wave1.master.enemyCount < 12 || wave1.rookie.hpScale < .85 || wave1.veteran.hpScale < 1.45 || wave1.master.hpScale < 1.95) throw new Error(`Opening difficulty targets are not calibrated: ${JSON.stringify(wave1)}`);
+  if (!(wave1.master.spawnInterval < wave1.veteran.spawnInterval && wave1.veteran.spawnInterval < wave1.rookie.spawnInterval && wave1.master.speedScale > wave1.veteran.speedScale && wave1.veteran.speedScale > wave1.rookie.speedScale && wave1.master.advancedChance >= .64)) throw new Error(`Opening density, speed and elite ratio are not pressure-scaled: ${JSON.stringify(wave1)}`);
+  const openingPressure = ['rookie', 'veteran', 'master'].map((key) => {
+    const profile = wave1[key];
+    return profile.enemyCount * profile.hpScale * profile.speedScale * (1 + profile.advancedChance);
+  });
+  if (!(openingPressure[1] > openingPressure[0] * 2.5 && openingPressure[2] > openingPressure[1] * 2)) throw new Error(`Difficulty tiers are not meaningfully separated: ${JSON.stringify({ wave1, openingPressure })}`);
   if (!wave10.isBossWave || wave11.stage !== wave10.stage + 1 || !(wave11.hpScale > wave10.hpScale)) throw new Error('Ten-wave step-up is not calibrated');
-  if (wave100.stage !== 10 || wave100.bossCount !== 3 || wave100.batchSize !== 4 || wave100.requiredGroups !== 20) throw new Error(`Wave 100 profile is incorrect: ${JSON.stringify(wave100)}`);
+  if (wave100.stage !== 10 || wave100.bossCount !== 3 || wave100.batchSize !== 5 || wave100.requiredGroups !== 23) throw new Error(`Wave 100 profile is incorrect: ${JSON.stringify(wave100)}`);
   balance.masterCurve.forEach((profile, index) => {
     if (index === 0) return;
     const previous = balance.masterCurve[index - 1];
@@ -397,10 +445,11 @@ let activeBrowser;
     if (profile.wave % 10 === 0 && !profile.isBossWave) throw new Error(`Boss wave missing at ${profile.wave}`);
     if (profile.wave % 10 === 1 && profile.wave > 1 && profile.stage !== previous.stage + 1) throw new Error(`Stage transition missing at ${profile.wave}`);
   });
-  if (balance.ideal.firstFailure !== null || !(balance.ideal.minimumMargin > 1 && balance.ideal.minimumMargin < 1.08)) throw new Error(`Ideal master curve is not tuned to the edge: ${JSON.stringify(balance.ideal)}`);
-  if (!(balance.nearIdeal.firstFailure >= 50 && balance.nearIdeal.firstFailure < 100)) throw new Error(`Near-ideal play should fail before wave 100: ${JSON.stringify(balance.nearIdeal)}`);
-  const idealLevels = Object.values(balance.ideal.equipment);
-  if (Math.max(...idealLevels) - Math.min(...idealLevels) > 1) throw new Error(`Ideal auto-upgrade is not balanced: ${JSON.stringify(balance.ideal.equipment)}`);
+  if (balance.casualRookie.firstFailure !== null || balance.casualRookie.minimumMargin < 1) throw new Error(`Rookie is not clearable by casual-positive play: ${JSON.stringify(balance.casualRookie)}`);
+  if (balance.medianVeteran.firstFailure === null || balance.skilledVeteran.firstFailure !== null) throw new Error(`Veteran is not calibrated as a meaningful skill divider: ${JSON.stringify({ median: balance.medianVeteran, skilled: balance.skilledVeteran })}`);
+  if (balance.strongMaster.firstFailure === null || balance.eliteMaster.firstFailure !== null || !(balance.eliteMaster.minimumMargin > 1 && balance.eliteMaster.minimumMargin < 1.08)) throw new Error(`Master is not calibrated for a tiny elite clear window: ${JSON.stringify({ strong: balance.strongMaster, elite: balance.eliteMaster })}`);
+  const eliteLevels = Object.values(balance.eliteMaster.equipment);
+  if (Math.max(...eliteLevels) - Math.min(...eliteLevels) > 1) throw new Error(`Elite auto-upgrade is not balanced: ${JSON.stringify(balance.eliteMaster.equipment)}`);
 
   await page.setViewportSize({ width: 1920, height: 900 });
   await page.waitForTimeout(350);
