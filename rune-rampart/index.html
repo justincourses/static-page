@@ -51,12 +51,25 @@
           <button class="text-button" id="helpButton" type="button">
             <span class="restart-long">战役选项</span><span class="restart-short" aria-hidden="true">重开</span>
           </button>
+          <button class="icon-button rules-button" id="rulesButton" type="button" aria-label="查看游戏规则" title="查看游戏规则">
+            <span aria-hidden="true">?</span>
+          </button>
           <button class="icon-button" id="fullscreenButton" type="button" aria-label="进入全屏" title="进入全屏">
             <span aria-hidden="true">⛶</span>
           </button>
-          <button class="icon-button music-button" id="musicButton" type="button" aria-label="关闭 MIDI 配乐" title="关闭 MIDI 配乐" aria-pressed="true">
-            <span aria-hidden="true">♫</span>
-          </button>
+          <div class="music-controls" role="group" aria-label="MIDI 军乐控制">
+            <button class="icon-button music-button" id="musicButton" type="button" aria-label="关闭 MIDI 配乐" title="关闭 MIDI 配乐" aria-pressed="true">
+              <span aria-hidden="true">♫</span>
+            </button>
+            <button class="icon-button track-skip-button" id="nextTrackButton" type="button" aria-label="切换下一首" title="切换下一首">
+              <span aria-hidden="true">»</span>
+            </button>
+            <span class="music-hover-tip" id="musicHoverTip" aria-hidden="true">
+              <b id="musicTrackCount">第 1 / 20 首</b>
+              <span>当前 · <strong id="musicCurrentTitle">方块疾行 · 科罗贝尼基</strong></span>
+              <span>下一首 · <strong id="musicNextTitle">山王逼近 · 山魔王宫殿</strong></span>
+            </span>
+          </div>
           <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭音效" title="关闭音效">
             <span class="sound-icon" aria-hidden="true">♪</span>
           </button>
@@ -120,7 +133,7 @@
             <div class="board-lock" id="boardLock" aria-hidden="true"><span>战局暂停</span></div>
           </div>
 
-          <p class="board-hint"><span>消除规则：</span>每组都推进补强；颜色决定即时收益，四连与五连提供额外补强</p>
+          <p class="board-hint"><span>操作：</span>交换相邻符文，连成三枚即可消除</p>
         </section>
 
         <section class="panel battle-panel" aria-labelledby="battleTitle">
@@ -211,10 +224,10 @@
             <div class="upgrade-console">
               <div class="strategy-copy">
                 <span>下一次升级</span>
-                <small id="strategyHint">自动 · 均衡补强</small>
+                <small id="strategyHint">自动 · 本次攻击</small>
               </div>
-              <div class="forge-meter-wrap">
-                <span>补强进度 <b id="forgeProgressText">0 / 26</b></span>
+              <div class="forge-meter-wrap" aria-label="补强进度">
+                <span><em id="forgeTargetName">攻击 LV.1→2</em><b id="forgeProgressText">0 / 26</b></span>
                 <div class="meter-track forge-track"><span id="forgeMeter"></span></div>
               </div>
               <div class="strategy-options" role="group" aria-label="选择升级优先级">
@@ -223,7 +236,6 @@
                 <button class="strategy-button" type="button" data-upgrade="armor" aria-pressed="false"><i>◇</i>防御</button>
                 <button class="strategy-button" type="button" data-upgrade="charm" aria-pressed="false"><i>»</i>攻速</button>
               </div>
-              <small class="forge-rule">补强规则：每组 +1 · 四连 +1 · 五连 +2 · 铸币组 +1</small>
             </div>
             <section class="battle-loadout" aria-label="当前军械数值">
               <article class="loadout-stat weapon-card" id="weaponCard">
@@ -303,7 +315,7 @@
           <div><i class="moss">⬟</i><span><b>绿晶</b>即时修复受损城墙</span></div>
           <div><i class="coin">●</i><span><b>补强</b>每组消除均推进；长连和铸币组额外增加</span></div>
         </div>
-        <p class="briefing-music-note"><b>♫ MIDI 军乐曲单</b><span>科罗贝尼基 · 山魔王宫殿 · 康康舞曲 · 原创战曲 / 自动循环</span></p>
+        <p class="briefing-music-note"><b>♫ 20 首 MIDI 军乐</b><span>科罗贝尼基 · 欢乐颂 · 四季 · 传统民谣 · 原创战曲 / 自动循环，可随时切歌</span></p>
         <button class="primary-button" id="startButton" type="button"><span>以「新手」出征</span><small>开始百波挑战</small></button>
         <p class="briefing-note">战役中可从右上角重新打开此界面；确认出征将重开游戏。</p>
       </div>
@@ -329,15 +341,112 @@
       </div>
     </div>
 
-    <div class="modal-backdrop" id="gameOverModal" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle">
-      <div class="briefing-card game-over-card">
-        <span class="briefing-kicker">城墙失守 · 战报归档</span>
-        <h2 id="gameOverTitle">火种未熄，<br />防线可以重建。</h2>
-        <div class="final-stats">
-          <div><span>坚守波次</span><strong id="finalWave">0</strong></div>
-          <div><span>歼灭敌军</span><strong id="finalKills">0</strong></div>
-          <div><span>最终军功</span><strong id="finalScore">0</strong></div>
+    <div class="modal-backdrop" id="rulesModal" role="dialog" aria-modal="true" aria-labelledby="rulesTitle" aria-describedby="rulesDescription">
+      <div class="briefing-card rules-card">
+        <button class="modal-close" id="rulesClose" type="button" aria-label="关闭游戏规则">×</button>
+        <span class="briefing-kicker">作战条例 · FIELD MANUAL</span>
+        <h2 id="rulesTitle">游戏规则</h2>
+        <p id="rulesDescription">战场只显示当前决策；所有完整规则都可以随时回到这里查看。</p>
+
+        <div class="rules-grid">
+          <section class="rule-section rune-rule">
+            <h3><i aria-hidden="true">✦</i> 符文消除</h3>
+            <ul>
+              <li>交换相邻符文，连成 3 枚或以上即可消除。</li>
+              <li>每个消除组提供 1 点补强；四连额外 +1，五连及以上额外 +2，铸币组再额外 +1。</li>
+              <li>红曜石储备余烬齐射，蓝晶积蓄奥能，绿晶即时修复城墙。</li>
+            </ul>
+          </section>
+
+          <section class="rule-section forge-rule-card">
+            <h3><i aria-hidden="true">◇</i> 军械补强</h3>
+            <ul>
+              <li>攻击、防御、攻速分别按自身等级计算下一级费用，等级越高费用越高。</li>
+              <li>切换优先目标不会损失已有补强；“自动”会为本次升级选定目标，升级后再重选。</li>
+              <li>补强增加与升级消费都会在 HUD、数值动画和军情中明确反馈。</li>
+            </ul>
+          </section>
+
+          <section class="rule-section battle-rule">
+            <h3><i aria-hidden="true">⌁</i> 城防战斗</h3>
+            <ul>
+              <li>尚未进入战场的敌人无法被锁定；进场后弩炮会自动瞄准最接近城墙的目标。</li>
+              <li>敌军分速度、攻击、防御、均衡与 Boss 型，外观和战斗属性各不相同。</li>
+              <li>攻速提高后会逐步变为多枚齐射；奥能达到 18 点可发动全场攻击。</li>
+            </ul>
+          </section>
+
+          <section class="rule-section relic-rule">
+            <h3><i aria-hidden="true">◆</i> 彩蛋效果</h3>
+            <ul>
+              <li>敌军或新落下的方块可能携带彩蛋；难度越高，彩蛋越稀有。</li>
+              <li>彩蛋会触发范围攻击、减速或破甲；连续获得时按队列逐个生效。</li>
+              <li>当前效果与等待数量显示在战场右上角的符文效果框。</li>
+            </ul>
+          </section>
+
+          <section class="rule-section difficulty-rule">
+            <h3><i aria-hidden="true">♛</i> 难度与排名</h3>
+            <ul>
+              <li>新手适合熟悉规则；老兵约有一半玩家难以通关；大佬面向极限挑战。</li>
+              <li>更高难度会提高敌军数量、速度与高阶怪密度，同时降低彩蛋出现率。</li>
+              <li>结算榜按难度优先，再比较波次、总分、歼敌与消除成绩。</li>
+            </ul>
+          </section>
+
+          <section class="rule-section save-rule">
+            <h3><i aria-hidden="true">Ⅱ</i> 暂停与存档</h3>
+            <ul>
+              <li>暂停会立即冻结战斗、消除连锁与所有效果，并保存当前状态。</li>
+              <li>每波开始和离开页面时也会自动保存；下次进入可选择继续或重开。</li>
+              <li>从存档继续会立即恢复交战，暂停时间不计入结算时长。</li>
+            </ul>
+          </section>
         </div>
+
+        <p class="rules-footer"><kbd>Q</kbd> 发动奥术齐射　·　<kbd>Esc</kbd> 关闭规则 / 暂停</p>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="gameOverModal" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" aria-describedby="scoreRuleNote">
+      <div class="briefing-card game-over-card">
+        <div class="settlement-heading">
+          <div>
+            <span class="briefing-kicker">城墙失守 · 战报归档</span>
+            <h2 id="gameOverTitle">本局成绩结算</h2>
+          </div>
+          <div class="settlement-rank-stamp"><span>本局排名</span><strong id="finalRank">#01</strong></div>
+        </div>
+        <div class="final-stats settlement-stats">
+          <div><span>难度</span><strong id="finalDifficulty">新手</strong></div>
+          <div><span>守完波次</span><strong id="finalWave">0 / 100</strong></div>
+          <div><span>歼灭敌军</span><strong id="finalKills">0</strong></div>
+          <div><span>消除组数</span><strong id="finalMatches">0</strong></div>
+          <div><span>有效时长</span><strong id="finalTime">00:00</strong></div>
+          <div><span>结算总分</span><strong id="finalScore">0</strong></div>
+        </div>
+        <div class="score-ledger">
+          <span>结算分构成</span>
+          <strong id="finalScoreBreakdown">基础军功 0 + 波次 0 + 坚守时间 0</strong>
+          <small id="scoreRuleNote">只计算实际交战时间，暂停不计时；历史榜先按大佬、老兵、新手分层，再比较波次、总分、歼敌与消除，完全相同时较早战报优先。</small>
+        </div>
+        <section class="history-board" aria-labelledby="historyTitle">
+          <div class="history-heading">
+            <div><h3 id="historyTitle">本机历史战绩</h3><span id="historyCount">0 条战报</span></div>
+            <div class="history-filters" role="group" aria-label="按难度查看历史排名">
+              <button class="is-active" type="button" data-history-filter="all" aria-pressed="true">总榜</button>
+              <button type="button" data-history-filter="master" aria-pressed="false">大佬</button>
+              <button type="button" data-history-filter="veteran" aria-pressed="false">老兵</button>
+              <button type="button" data-history-filter="rookie" aria-pressed="false">新手</button>
+            </div>
+          </div>
+          <div class="history-table-wrap">
+            <table class="history-table">
+              <thead><tr><th scope="col">名次</th><th scope="col">难度</th><th scope="col">波次</th><th scope="col">总分</th><th scope="col">歼敌</th><th scope="col">时长</th><th scope="col">记录时间</th></tr></thead>
+              <tbody id="historyRows"></tbody>
+            </table>
+          </div>
+        </section>
         <button class="primary-button" id="restartButton" type="button"><span>重整防线</span><small>再次出征</small></button>
       </div>
     </div>

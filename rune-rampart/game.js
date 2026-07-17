@@ -8,8 +8,10 @@
   const EMBER_CHARGE_CAP = 24;
   const EMBER_DAMAGE_MULTIPLIER = 1.25;
   const FORGE_START = 26;
-  const FORGE_STEP = 3;
-  const FORGE_MAX = 56;
+  const FORGE_LEVEL_STEP = 10;
+  const FORGE_LATE_STEP = 2;
+  const FORGE_EARLY_LEVELS = 4;
+  const UPGRADE_SLOTS = ['weapon', 'armor', 'charm'];
   const ENEMY_ENTRY_X = 98;
   const TARGET_ACQUIRE_DELAY = 220;
   const SAVE_VERSION = 1;
@@ -17,8 +19,13 @@
     difficulty: 'runeRampart.difficulty',
     muted: 'runeRampart.muted',
     music: 'runeRampart.music',
-    progress: 'runeRampart.progress.v1'
+    musicTrack: 'runeRampart.musicTrack',
+    progress: 'runeRampart.progress.v1',
+    history: 'runeRampart.history.v1'
   };
+  const HISTORY_LIMIT = 30;
+  const HISTORY_VISIBLE_LIMIT = 8;
+  const DIFFICULTY_PRIORITY = { rookie: 1, veteran: 2, master: 3 };
   const TYPES = ['ember', 'mana', 'moss', 'coin'];
   const SYMBOLS = { ember: '◆', mana: '✦', moss: '⬟', coin: '●' };
   const TYPE_NAMES = { ember: '红曜石', mana: '蓝晶', moss: '绿晶', coin: '铸币' };
@@ -63,6 +70,16 @@
     frost: { name: '霜缚符文', icon: '❄', description: '命中减慢敌军', className: 'frost' },
     shatter: { name: '破甲符文', icon: '⌁', description: '命中削弱防御', className: 'shatter' }
   };
+  const arrangeMusicTrack = ({ title, source, bpm, melody, roots, cycles = 2 }) => ({
+    title,
+    source,
+    bpm,
+    cycles,
+    melody,
+    bass: melody.map((note, index) => index % 4 === 0 ? roots[Math.floor(index / 4) % roots.length] : null),
+    harmony: melody.map((note, index) => note !== null && index % 2 === 0 ? note - 12 : null)
+  });
+
   const MUSIC_TRACKS = [
     {
       title: '方块疾行 · 科罗贝尼基', source: '公版俄罗斯民谣改编', bpm: 118, cycles: 3,
@@ -87,7 +104,87 @@
       melody: [74, null, 77, 76, 74, null, 72, 69, 70, null, 74, 72, 69, null, 67, 65, 69, null, 72, 74, 77, null, 76, 72, 74, null, 72, 69, 67, null, 69, 72],
       bass: [38, null, null, null, 38, null, 45, null, 41, null, null, null, 36, null, 43, null, 38, null, null, null, 34, null, 41, null, 36, null, null, null, 33, null, 36, null],
       harmony: [62, null, null, null, null, null, 60, null, 58, null, null, null, 57, null, 55, null, 57, null, null, null, 62, null, 60, null, 58, null, null, null, 55, null, 57, null]
-    }
+    },
+    arrangeMusicTrack({
+      title: '黎明颂歌 · 欢乐颂', source: '贝多芬公版作品改编', bpm: 112,
+      melody: [64,64,65,67,67,65,64,62,60,60,62,64,64,62,62,null,64,64,65,67,67,65,64,62,60,60,62,64,62,60,60,null],
+      roots: [36,36,41,41,36,36,43,36]
+    }),
+    arrangeMusicTrack({
+      title: '月下侦察 · 致爱丽丝', source: '贝多芬公版作品改编', bpm: 116,
+      melody: [76,75,76,75,76,71,74,72,69,null,60,64,69,71,null,64,68,71,72,null,64,76,75,76,75,76,71,74,72,69,null,null],
+      roots: [45,40,45,40,45,40,45,45]
+    }),
+    arrangeMusicTrack({
+      title: '禁卫急行 · 土耳其进行曲', source: '莫扎特公版作品改编', bpm: 128,
+      melody: [71,69,68,69,72,74,72,71,72,76,77,76,74,72,71,69,68,69,72,74,72,71,72,76,77,76,74,72,71,69,69,null],
+      roots: [45,45,40,40,45,45,40,45]
+    }),
+    arrangeMusicTrack({
+      title: '王庭舞步 · G 大调小步舞曲', source: '佩措尔德公版作品改编', bpm: 106,
+      melody: [67,62,64,66,67,62,62,69,66,67,69,71,72,62,62,null,64,66,64,62,61,64,67,71,72,71,69,67,66,64,62,null],
+      roots: [43,38,43,38,40,36,43,38]
+    }),
+    arrangeMusicTrack({
+      title: '春日出征 · 四季·春', source: '维瓦尔第公版作品改编', bpm: 124,
+      melody: [76,75,76,71,69,69,71,68,64,68,71,76,75,76,71,69,69,71,68,64,68,71,76,74,72,71,69,68,66,64,64,null],
+      roots: [40,45,40,45,40,45,43,40]
+    }),
+    arrangeMusicTrack({
+      title: '长河回旋 · 蓝色多瑙河', source: '小约翰·施特劳斯公版作品改编', bpm: 108,
+      melody: [67,71,74,74,71,67,64,67,72,76,79,79,76,72,67,69,74,77,81,81,77,74,69,71,76,79,83,81,79,76,74,null],
+      roots: [43,40,41,43,38,43,40,43]
+    }),
+    arrangeMusicTrack({
+      title: '赤红哨站 · 哈巴涅拉', source: '比才公版作品改编', bpm: 104,
+      melody: [69,69,69,68,69,71,69,68,66,66,66,65,66,68,66,65,64,69,68,66,65,64,62,64,65,66,68,66,65,64,64,null],
+      roots: [45,40,45,40,45,40,43,45]
+    }),
+    arrangeMusicTrack({
+      title: '骑兵破阵 · 威廉退尔序曲', source: '罗西尼公版作品改编', bpm: 138,
+      melody: [64,64,64,64,64,64,64,64,67,67,67,67,69,69,69,69,72,72,72,72,74,72,69,65,64,67,72,76,74,72,69,null],
+      roots: [36,36,43,45,48,41,36,43]
+    }),
+    arrangeMusicTrack({
+      title: '焰火凯旋 · 皇家焰火音乐', source: '亨德尔公版作品改编', bpm: 122,
+      melody: [67,69,71,72,74,72,71,69,67,71,74,79,78,76,74,72,71,69,67,66,67,69,71,72,74,76,74,72,71,69,67,null],
+      roots: [43,38,43,38,40,43,38,43]
+    }),
+    arrangeMusicTrack({
+      title: '新大陆守望 · 自新大陆', source: '德沃夏克公版作品改编', bpm: 94,
+      melody: [64,67,67,64,62,60,62,64,67,64,62,null,64,67,69,67,64,62,60,62,64,67,64,62,60,null,60,62,64,67,64,null],
+      roots: [36,43,36,41,36,43,41,36]
+    }),
+    arrangeMusicTrack({
+      title: '黑旗狂舞 · 匈牙利舞曲第五号', source: '勃拉姆斯公版作品改编', bpm: 132,
+      melody: [69,72,71,69,68,69,72,76,76,75,73,72,71,72,69,null,69,72,71,69,68,69,72,76,79,77,76,74,72,71,69,null],
+      roots: [45,40,45,40,45,40,43,45]
+    }),
+    arrangeMusicTrack({
+      title: '绿袖林地 · 绿袖子', source: '英格兰公版传统民谣改编', bpm: 98,
+      melody: [69,72,74,76,77,76,74,71,67,69,71,72,69,69,68,69,71,68,64,66,68,69,66,66,65,66,68,65,62,64,65,null],
+      roots: [45,41,43,45,40,45,41,45]
+    }),
+    arrangeMusicTrack({
+      title: '旧日战友 · 友谊地久天长', source: '苏格兰公版传统民谣改编', bpm: 102,
+      melody: [60,65,65,65,69,67,65,67,69,65,65,69,72,74,74,null,72,69,69,65,67,65,67,69,65,62,62,60,65,65,65,null],
+      roots: [41,41,36,43,41,36,43,41]
+    }),
+    arrangeMusicTrack({
+      title: '樱落城门 · 樱花', source: '日本公版传统民谣改编', bpm: 92,
+      melody: [69,69,71,69,69,71,69,71,72,71,69,71,68,64,68,null,64,68,69,71,68,69,68,64,63,64,68,69,71,68,69,null],
+      roots: [45,45,40,45,40,45,40,45]
+    }),
+    arrangeMusicTrack({
+      title: '迷雾集市 · 斯卡布罗集市', source: '英格兰公版传统民谣改编', bpm: 96,
+      melody: [69,69,76,76,71,72,71,69,76,79,81,79,76,77,74,76,69,72,74,72,71,69,67,69,69,67,64,67,69,69,69,null],
+      roots: [45,40,45,43,45,40,43,45]
+    }),
+    arrangeMusicTrack({
+      title: '海港夜巡 · 醉水手', source: '爱尔兰公版传统船歌改编', bpm: 126,
+      melody: [69,69,69,69,69,69,69,69,72,76,76,72,69,65,67,69,67,67,67,67,67,67,67,67,71,74,74,71,67,64,66,67],
+      roots: [45,45,48,45,43,43,47,43]
+    })
   ];
 
   const $ = (selector) => document.querySelector(selector);
@@ -117,11 +214,13 @@
     waveAnnouncement: $('#waveAnnouncement'),
     introModal: $('#introModal'),
     resumeModal: $('#resumeModal'),
+    rulesModal: $('#rulesModal'),
     gameOverModal: $('#gameOverModal'),
     victoryModal: $('#victoryModal'),
     pauseButton: $('#pauseButton'),
     fullscreenButton: $('#fullscreenButton'),
     musicButton: $('#musicButton'),
+    nextTrackButton: $('#nextTrackButton'),
     soundButton: $('#soundButton'),
     boardEffects: $('#boardEffects'),
     cascadeCallout: $('#cascadeCallout'),
@@ -256,7 +355,10 @@
     master: null,
     filter: null,
     step: 0,
-    trackIndex: 0,
+    trackIndex: (() => {
+      const stored = Number.parseInt(readStorage(STORAGE_KEYS.musicTrack, '0'), 10);
+      return Number.isFinite(stored) ? Math.max(0, stored) % MUSIC_TRACKS.length : 0;
+    })(),
     trackCycle: 0,
     lastAnnouncedKey: '',
     nextNoteAt: 0,
@@ -277,10 +379,20 @@
 
     advanceTrack(announce = true) {
       this.trackIndex = (this.trackIndex + 1) % MUSIC_TRACKS.length;
+      writeStorage(STORAGE_KEYS.musicTrack, String(this.trackIndex));
       this.step = 0;
       this.trackCycle = 0;
       if (announce) this.announceTrack();
       return this.currentTrack();
+    },
+
+    skip() {
+      const resumePlayback = this.playing;
+      if (resumePlayback) this.stop();
+      const track = this.advanceTrack(true);
+      if (resumePlayback) this.start();
+      sound.play('click', .16, 1.24);
+      return track;
     },
 
     midiToFrequency(note) {
@@ -380,11 +492,62 @@
     waveQueue: 0, waveTotal: 0, waveSpawned: 0, waveBossesRemaining: 0,
     waveMatches: 0, totalMatches: 0, waveProfile: null, nextSpawnAt: 0, intermissionUntil: 0,
     attackReadyAt: 0, lastFrame: 0, animationId: 0, lastUiAt: 0, sessionId: 0,
-    combatBuff: null, combatBuffQueue: [], introWasPaused: false, pendingSaveReason: null
+    combatBuff: null, combatBuffQueue: [], introWasPaused: false, rulesWasPaused: false, pendingSaveReason: null,
+    resolution: null, pausedAt: 0, activePlayMs: 0, playSegmentStartedAt: 0, settlementRecorded: false
   };
   let pendingResume = null;
+  let settlementHistory = [];
+  let currentSettlementId = null;
+  let activeHistoryFilter = 'all';
+  let rulesReturnFocus = null;
+  const gameTasks = new Set();
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  function armGameTask(task) {
+    task.startedAt = performance.now();
+    task.nativeId = window.setTimeout(() => {
+      task.nativeId = 0;
+      gameTasks.delete(task);
+      task.callback();
+    }, Math.max(0, task.remaining));
+  }
+
+  function scheduleGameTask(callback, delay = 0, onCancel = null) {
+    const task = {
+      callback,
+      onCancel,
+      remaining: Math.max(0, Number(delay) || 0),
+      startedAt: 0,
+      nativeId: 0
+    };
+    gameTasks.add(task);
+    if (state.started && !state.paused && !state.gameOver) armGameTask(task);
+    return task;
+  }
+
+  function pauseGameTasks(now = performance.now()) {
+    gameTasks.forEach((task) => {
+      if (!task.nativeId) return;
+      window.clearTimeout(task.nativeId);
+      task.nativeId = 0;
+      task.remaining = Math.max(0, task.remaining - (now - task.startedAt));
+    });
+  }
+
+  function resumeGameTasks() {
+    gameTasks.forEach((task) => {
+      if (!task.nativeId) armGameTask(task);
+    });
+  }
+
+  function clearGameTasks() {
+    gameTasks.forEach((task) => {
+      if (task.nativeId) window.clearTimeout(task.nativeId);
+      task.onCancel?.();
+    });
+    gameTasks.clear();
+  }
+
+  const wait = (ms) => new Promise((resolve) => scheduleGameTask(resolve, ms, resolve));
   const randomType = () => TYPES[Math.floor(Math.random() * TYPES.length)];
   const randomRuneRelic = () => {
     const chance = DIFFICULTIES[state.difficulty]?.runeRelicChance || 0;
@@ -398,6 +561,171 @@
     const numeric = Number(value);
     return Number.isFinite(numeric) ? clamp(numeric, minimum, maximum) : fallback;
   };
+
+  function currentActivePlayMs(now = performance.now()) {
+    const currentSegment = state.started && !state.paused && !state.gameOver && state.playSegmentStartedAt
+      ? Math.max(0, now - state.playSegmentStartedAt)
+      : 0;
+    return Math.max(0, state.activePlayMs + currentSegment);
+  }
+
+  function closePlaySegment(now = performance.now()) {
+    state.activePlayMs = currentActivePlayMs(now);
+    state.playSegmentStartedAt = 0;
+  }
+
+  function formatBattleTime(milliseconds) {
+    const totalSeconds = Math.max(0, Math.floor((Number(milliseconds) || 0) / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return hours
+      ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  function normalizeHistoryRecord(record, index = 0) {
+    if (!record || !DIFFICULTIES[record.difficulty]) return null;
+    const achievedAt = Math.floor(safeNumber(record.achievedAt, Date.now(), 1));
+    const activePlayMs = Math.floor(safeNumber(record.activePlayMs, 0, 0, 1000 * 60 * 60 * 48));
+    const clearedWaves = Math.floor(safeNumber(record.clearedWaves, 0, 0, MAX_WAVES));
+    const baseScore = Math.floor(safeNumber(record.baseScore, record.score, 0, 1000000000));
+    const waveScore = Math.floor(safeNumber(record.waveScore, clearedWaves * 1500, 0, 1000000000));
+    const timeScore = Math.floor(safeNumber(record.timeScore, Math.floor(activePlayMs / 1000) * 2, 0, 1000000000));
+    return {
+      id: String(record.id || `${achievedAt}-${index}`),
+      achievedAt,
+      difficulty: record.difficulty,
+      victory: Boolean(record.victory),
+      clearedWaves,
+      activePlayMs,
+      baseScore,
+      waveScore,
+      timeScore,
+      settlementScore: Math.floor(safeNumber(record.settlementScore, baseScore + waveScore + timeScore, 0, 2000000000)),
+      kills: Math.floor(safeNumber(record.kills, 0, 0, 100000000)),
+      totalMatches: Math.floor(safeNumber(record.totalMatches, 0, 0, 100000000)),
+      repaired: Math.floor(safeNumber(record.repaired, 0, 0, 100000000))
+    };
+  }
+
+  function sortHistory(records) {
+    return [...records].sort((first, second) => (
+      DIFFICULTY_PRIORITY[second.difficulty] - DIFFICULTY_PRIORITY[first.difficulty]
+      || second.clearedWaves - first.clearedWaves
+      || second.settlementScore - first.settlementScore
+      || second.kills - first.kills
+      || second.totalMatches - first.totalMatches
+      || first.achievedAt - second.achievedAt
+    ));
+  }
+
+  function readHistory() {
+    try {
+      const parsed = JSON.parse(readStorage(STORAGE_KEYS.history, '[]'));
+      if (!Array.isArray(parsed)) return [];
+      return sortHistory(parsed.map(normalizeHistoryRecord).filter(Boolean)).slice(0, HISTORY_LIMIT);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeHistory(records) {
+    const normalized = sortHistory((Array.isArray(records) ? records : []).map(normalizeHistoryRecord).filter(Boolean)).slice(0, HISTORY_LIMIT);
+    writeStorage(STORAGE_KEYS.history, JSON.stringify(normalized));
+    return normalized;
+  }
+
+  function createSettlementRecord(victory = false) {
+    const activePlayMs = Math.floor(currentActivePlayMs());
+    const clearedWaves = victory ? MAX_WAVES : Math.max(0, state.wave - 1);
+    const waveScore = clearedWaves * 1500;
+    const timeScore = Math.floor(activePlayMs / 1000) * 2;
+    const achievedAt = Date.now();
+    return normalizeHistoryRecord({
+      id: `${achievedAt}-${Math.random().toString(36).slice(2, 8)}`,
+      achievedAt,
+      difficulty: state.difficulty,
+      victory,
+      clearedWaves,
+      activePlayMs,
+      baseScore: state.score,
+      waveScore,
+      timeScore,
+      settlementScore: state.score + waveScore + timeScore,
+      kills: state.kills,
+      totalMatches: state.totalMatches,
+      repaired: state.repaired
+    });
+  }
+
+  function recordSettlement(victory = false) {
+    if (state.settlementRecorded) return null;
+    state.settlementRecorded = true;
+    const record = createSettlementRecord(victory);
+    const history = writeHistory([...readHistory(), record]);
+    return { record, history, rank: history.findIndex((item) => item.id === record.id) + 1 };
+  }
+
+  function renderHistory(history = settlementHistory, currentId = currentSettlementId) {
+    const rows = $('#historyRows');
+    if (!rows) return;
+    const visibleHistory = activeHistoryFilter === 'all'
+      ? history
+      : history.filter((record) => record.difficulty === activeHistoryFilter);
+    rows.replaceChildren();
+    visibleHistory.slice(0, HISTORY_VISIBLE_LIMIT).forEach((record, index) => {
+      const row = document.createElement('tr');
+      if (record.id === currentId) row.classList.add('is-current');
+      const date = new Date(record.achievedAt).toLocaleString('zh-CN', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      });
+      const values = [
+        `#${String(index + 1).padStart(2, '0')}`,
+        DIFFICULTIES[record.difficulty].name,
+        `${record.clearedWaves} 波`,
+        record.settlementScore.toLocaleString('zh-CN'),
+        String(record.kills),
+        formatBattleTime(record.activePlayMs),
+        date
+      ];
+      values.forEach((value) => {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+      });
+      rows.appendChild(row);
+    });
+    document.querySelectorAll('[data-history-filter]').forEach((button) => {
+      const active = button.dataset.historyFilter === activeHistoryFilter;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    const count = $('#historyCount');
+    if (count) count.textContent = `${visibleHistory.length} 条战报`;
+  }
+
+  function setHistoryFilter(filter = 'all') {
+    activeHistoryFilter = filter === 'all' || DIFFICULTIES[filter] ? filter : 'all';
+    renderHistory();
+  }
+
+  function renderFailureSettlement(result) {
+    if (!result) return;
+    const { record, history, rank } = result;
+    $('#finalDifficulty').textContent = DIFFICULTIES[record.difficulty].name;
+    $('#finalWave').textContent = `${record.clearedWaves} / ${MAX_WAVES}`;
+    $('#finalKills').textContent = record.kills;
+    $('#finalMatches').textContent = record.totalMatches;
+    $('#finalTime').textContent = formatBattleTime(record.activePlayMs);
+    $('#finalScore').textContent = record.settlementScore.toLocaleString('zh-CN');
+    $('#finalRank').textContent = `#${String(rank).padStart(2, '0')}`;
+    $('#finalScoreBreakdown').textContent = `基础军功 ${record.baseScore.toLocaleString('zh-CN')} + 波次 ${record.waveScore.toLocaleString('zh-CN')} + 坚守时间 ${record.timeScore.toLocaleString('zh-CN')}`;
+    settlementHistory = history;
+    currentSettlementId = record.id;
+    activeHistoryFilter = 'all';
+    renderHistory();
+  }
 
   function clearSavedProgress() {
     removeStorage(STORAGE_KEYS.progress);
@@ -443,11 +771,11 @@
 
   function saveProgress(reason = 'manual') {
     if (!state.started || state.gameOver) return false;
-    if (state.locked || state.board.some((type) => !TYPES.includes(type))) {
+    if (state.board.some((type) => !TYPES.includes(type))) {
       state.pendingSaveReason = reason;
       return false;
     }
-    const now = performance.now();
+    const now = state.paused && state.pausedAt ? state.pausedAt : performance.now();
     const save = {
       version: SAVE_VERSION,
       savedAt: Date.now(),
@@ -477,6 +805,9 @@
       waveBossesRemaining: state.waveBossesRemaining,
       waveMatches: state.waveMatches,
       totalMatches: state.totalMatches,
+      paused: state.paused,
+      activePlayMs: currentActivePlayMs(now),
+      resolution: state.resolution ? { ...state.resolution } : null,
       spawnDelay: Math.max(0, state.nextSpawnAt - now),
       attackDelay: Math.max(0, state.attackReadyAt - now),
       intermissionRemaining: state.intermissionUntil ? Math.max(0, state.intermissionUntil - now) : 0,
@@ -490,7 +821,7 @@
   }
 
   function flushPendingSave() {
-    if (!state.pendingSaveReason || state.locked) return;
+    if (!state.pendingSaveReason) return;
     const reason = state.pendingSaveReason;
     state.pendingSaveReason = null;
     saveProgress(reason);
@@ -562,18 +893,67 @@
     els.resumeModal.classList.add('is-open');
   }
 
+  function sanitizeResolution(resolution) {
+    if (!resolution || !['swap', 'resolve'].includes(resolution.kind)) return null;
+    if (resolution.kind === 'resolve') {
+      return { kind: 'resolve', phase: ['matching', 'primed', 'burst', 'dropping'].includes(resolution.phase) ? resolution.phase : 'matching' };
+    }
+    const first = Math.floor(safeNumber(resolution.first, -1, -1, ROWS * COLS - 1));
+    const second = Math.floor(safeNumber(resolution.second, -1, -1, ROWS * COLS - 1));
+    if (first < 0 || second < 0) return null;
+    return { kind: 'swap', phase: resolution.phase === 'reverting' ? 'reverting' : 'validate', first, second };
+  }
+
+  async function resumeSavedResolution(savedResolution, sessionId) {
+    if (!savedResolution || sessionId !== state.sessionId) return;
+    state.locked = true;
+    if (savedResolution.kind === 'swap') {
+      if (savedResolution.phase === 'reverting') {
+        await wait(280);
+      } else {
+        await wait(160);
+        if (sessionId !== state.sessionId) return;
+        if (findMatches().size === 0) {
+          const { first, second } = savedResolution;
+          [state.board[first], state.board[second]] = [state.board[second], state.board[first]];
+          [state.boardRelics[first], state.boardRelics[second]] = [state.boardRelics[second], state.boardRelics[first]];
+          state.resolution = { ...savedResolution, phase: 'reverting' };
+          renderBoard(new Set(), second);
+          await wait(280);
+        } else {
+          state.resolution = { kind: 'resolve', phase: 'matching' };
+          await resolveBoard(sessionId);
+        }
+      }
+    } else if (findMatches().size > 0) {
+      state.resolution = { kind: 'resolve', phase: 'matching' };
+      await resolveBoard(sessionId);
+    }
+    if (sessionId !== state.sessionId) return;
+    renderBoard();
+    state.locked = false;
+    state.resolution = null;
+    flushPendingSave();
+  }
+
   function restoreProgress(save = pendingResume || readSavedProgress()) {
     if (!save) return false;
+    const restoredFromPause = Boolean(save.paused);
     cancelAnimationFrame(state.animationId);
     music.stop();
     sound.init();
     state.sessionId += 1;
+    clearGameTasks();
+    const sessionId = state.sessionId;
     state.selected = null;
-    state.locked = false;
+    state.resolution = sanitizeResolution(save.resolution);
+    state.locked = Boolean(state.resolution);
     state.started = true;
     state.paused = false;
     state.gameOver = false;
+    state.rulesWasPaused = false;
     state.pendingSaveReason = null;
+    state.settlementRecorded = false;
     state.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'rookie';
     state.selectedDifficulty = state.difficulty;
     state.board = [...save.board];
@@ -585,7 +965,7 @@
     state.mana = Math.floor(safeNumber(save.mana, 0, 0, 99));
     state.repaired = Math.floor(safeNumber(save.repaired, 0, 0));
     state.forge = Math.floor(safeNumber(save.forge, 0, 0, 1000000));
-    state.forgeTarget = Math.floor(safeNumber(save.forgeTarget, FORGE_START, FORGE_START, FORGE_MAX));
+    state.forgeTarget = FORGE_START;
     state.equipment = {
       weapon: Math.floor(safeNumber(save.equipment?.weapon, 1, 1, 100)),
       armor: Math.floor(safeNumber(save.equipment?.armor, 1, 1, 100)),
@@ -593,6 +973,7 @@
     };
     state.upgradeMode = ['auto', 'weapon', 'armor', 'charm'].includes(save.upgradeMode) ? save.upgradeMode : 'auto';
     state.autoUpgradeIndex = Math.floor(safeNumber(save.autoUpgradeIndex, 0, 0, 1000000));
+    syncForgeTarget();
     state.wallMax = Math.floor(safeNumber(save.wallMax, 1120, 1, 100000000));
     state.wall = safeNumber(save.wall, state.wallMax, 1, state.wallMax);
     state.combo = Math.floor(safeNumber(save.combo, 1, 1, 999));
@@ -604,6 +985,7 @@
     state.waveBossesRemaining = Math.floor(safeNumber(save.waveBossesRemaining, state.waveProfile.bossCount, 0, 100));
     state.waveMatches = Math.floor(safeNumber(save.waveMatches, 0, 0, 1000000));
     state.totalMatches = Math.floor(safeNumber(save.totalMatches, 0, 0, 100000000));
+    state.activePlayMs = safeNumber(save.activePlayMs, 0, 0, 1000 * 60 * 60 * 48);
     state.combatBuff = sanitizeBuff(save.combatBuff);
     state.combatBuffQueue = Array.isArray(save.combatBuffQueue) ? save.combatBuffQueue.map(sanitizeBuff).filter(Boolean) : [];
 
@@ -616,6 +998,8 @@
     state.intermissionUntil = intermissionRemaining > 0 ? now + intermissionRemaining : 0;
     state.lastFrame = now;
     state.lastUiAt = 0;
+    state.pausedAt = 0;
+    state.playSegmentStartedAt = now;
 
     renderBoard(new Set(), -1, 'initial');
     updateCombo();
@@ -623,17 +1007,24 @@
     setUpgradeMode(state.upgradeMode, false);
     els.resumeModal.classList.remove('is-open');
     els.introModal.classList.remove('is-open', 'is-first-visit');
+    els.rulesModal.classList.remove('is-open');
     els.gameOverModal.classList.remove('is-open');
     els.victoryModal.classList.remove('is-open');
-    els.boardLock.classList.remove('is-visible');
-    els.pauseButton.querySelector('span').textContent = 'Ⅱ';
-    els.pauseButton.setAttribute('aria-label', '暂停游戏');
-    addLog(`已恢复第 ${state.wave} 波本地战报，棋盘与前线状态同步完成`);
+    els.boardLock.classList.toggle('is-visible', state.paused);
+    els.boardLock.querySelector('span').textContent = state.paused ? '战局暂停 · 战报已保存' : '战局暂停';
+    els.gameShell.classList.toggle('is-paused', state.paused);
+    els.pauseButton.querySelector('span').textContent = state.paused ? '▶' : 'Ⅱ';
+    els.pauseButton.setAttribute('aria-label', state.paused ? '继续游戏' : '暂停游戏');
+    addLog(`已${restoredFromPause ? '从暂停点继续' : '恢复'}第 ${state.wave} 波本地战报，棋盘与前线状态同步完成`);
     const restoredTargets = state.enemies.filter((enemy) => enemy.entered);
     aimTurret(restoredTargets.length ? restoredTargets.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest) : null);
     updateUI();
     state.animationId = requestAnimationFrame(gameLoop);
-    music.start();
+    if (state.resolution) resumeSavedResolution(state.resolution, sessionId);
+    if (!state.paused) {
+      resumeGameTasks();
+      music.start();
+    }
     pendingResume = null;
     return true;
   }
@@ -673,26 +1064,64 @@
     };
   }
 
+  function autoUpgradeSlot(equipment = state.equipment, index = state.autoUpgradeIndex) {
+    const minimum = Math.min(...UPGRADE_SLOTS.map((slot) => equipment[slot]));
+    const candidates = UPGRADE_SLOTS.filter((slot) => equipment[slot] === minimum);
+    return candidates[index % candidates.length];
+  }
+
+  function currentUpgradeSlot(mode = state.upgradeMode, equipment = state.equipment, autoIndex = state.autoUpgradeIndex) {
+    return mode === 'auto' ? autoUpgradeSlot(equipment, autoIndex) : mode;
+  }
+
+  function forgeCostFor(slot, equipment = state.equipment) {
+    const level = Math.max(1, Math.floor(Number(equipment[slot]) || 1));
+    const earlySteps = Math.min(level - 1, FORGE_EARLY_LEVELS - 1);
+    const lateSteps = Math.max(0, level - FORGE_EARLY_LEVELS);
+    return FORGE_START + earlySteps * FORGE_LEVEL_STEP + lateSteps * FORGE_LATE_STEP;
+  }
+
+  function syncForgeTarget() {
+    const slot = currentUpgradeSlot();
+    state.forgeTarget = forgeCostFor(slot);
+    return slot;
+  }
+
+  function upgradeSlotLabel(slot) {
+    return { weapon: '攻击', armor: '防御', charm: '攻速' }[slot] || '攻击';
+  }
+
+  function updateUpgradeTargetUI() {
+    const slot = syncForgeTarget();
+    const label = upgradeSlotLabel(slot);
+    const level = state.equipment[slot];
+    $('#strategyHint').textContent = state.upgradeMode === 'auto'
+      ? `自动 · 本次${label}`
+      : `${label}优先 · 持续生效`;
+    $('#forgeTargetName').textContent = `${label} LV.${level}→${level + 1}`;
+    return slot;
+  }
+
   // Deterministic balance model used by the browser regression suite. Every
   // successful group grants base reinforcement progress; coin and long groups
   // average another 35%. Ember charges amplify a portion of normal volleys.
   function simulateBalance(difficultyKey = 'master', efficiency = 1) {
     let forge = 0;
-    let forgeTarget = FORGE_START;
     const equipment = { weapon: 1, armor: 1, charm: 1 };
+    let autoUpgradeIndex = 0;
     let firstFailure = null;
     let minimumMargin = Infinity;
 
     for (let wave = 1; wave <= MAX_WAVES; wave += 1) {
       const profile = getWaveProfile(wave, difficultyKey);
       forge += profile.requiredGroups * 1.35 * efficiency;
-      while (forge >= forgeTarget) {
-        forge -= forgeTarget;
-        const weakest = ['weapon', 'armor', 'charm'].reduce((slot, candidate) => (
-          equipment[candidate] < equipment[slot] ? candidate : slot
-        ), 'weapon');
-        equipment[weakest] += 1;
-        forgeTarget = Math.min(FORGE_MAX, forgeTarget + FORGE_STEP);
+      while (true) {
+        const slot = autoUpgradeSlot(equipment, autoUpgradeIndex);
+        const cost = forgeCostFor(slot, equipment);
+        if (forge < cost) break;
+        forge -= cost;
+        equipment[slot] += 1;
+        autoUpgradeIndex += 1;
       }
 
       const power = weaponPower(equipment.weapon);
@@ -872,6 +1301,7 @@
     }
 
     state.locked = true;
+    state.resolution = { kind: 'swap', phase: 'validate', first, second: index };
     state.selected = null;
     sound.play('click', .15, 1.16);
     [state.board[first], state.board[index]] = [state.board[index], state.board[first]];
@@ -883,17 +1313,21 @@
       sound.play('denied', .2, .82);
       [state.board[first], state.board[index]] = [state.board[index], state.board[first]];
       [state.boardRelics[first], state.boardRelics[index]] = [state.boardRelics[index], state.boardRelics[first]];
+      state.resolution.phase = 'reverting';
       renderBoard(new Set(), index);
       await wait(280);
       if (sessionId !== state.sessionId) return;
       renderBoard();
       state.locked = false;
+      state.resolution = null;
       flushPendingSave();
       return;
     }
+    state.resolution = { kind: 'resolve', phase: 'matching' };
     await resolveBoard(sessionId);
     if (sessionId !== state.sessionId) return;
     state.locked = false;
+    state.resolution = null;
     flushPendingSave();
   }
 
@@ -911,6 +1345,7 @@
 
       if (chain > 1) await announceCascade(chain);
       if (sessionId !== state.sessionId) return;
+      state.resolution = { kind: 'resolve', phase: 'primed' };
       renderBoard(matches, -1, 'primed');
       $('.board-frame').classList.add('is-charging');
       sound.tone(142 + chain * 24, .32, 'sine', .025);
@@ -918,6 +1353,7 @@
       if (sessionId !== state.sessionId) return;
 
       createRuneBurst(matches);
+      state.resolution = { kind: 'resolve', phase: 'burst' };
       $('.board-frame').classList.remove('is-charging');
       $('.board-frame').classList.remove('is-bursting');
       void $('.board-frame').offsetWidth;
@@ -934,6 +1370,7 @@
         state.boardRelics[index] = null;
       });
       collapseBoard();
+      state.resolution = { kind: 'resolve', phase: 'dropping' };
       renderBoard(new Set(), -1, 'dropping');
       sound.tone(105, .09, 'triangle', .025, .19);
       await wait(560);
@@ -942,7 +1379,7 @@
       chain += 1;
     }
     state.combo = 1;
-    setTimeout(updateCombo, 450);
+    scheduleGameTask(updateCombo, 450);
     if (!hasPossibleMove()) {
       addLog('符文矩阵重组，新的路径已显现');
       buildBoard();
@@ -981,7 +1418,7 @@
         particle.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
         particle.style.animationDelay = `${particleIndex * 18}ms`;
         els.boardEffects.appendChild(particle);
-        setTimeout(() => particle.remove(), 850);
+        scheduleGameTask(() => particle.remove(), 850);
       }
     });
   }
@@ -1013,7 +1450,7 @@
     delta.className = `resource-delta ${mode}`;
     delta.textContent = text;
     legend.appendChild(delta);
-    setTimeout(() => {
+    scheduleGameTask(() => {
       delta.remove();
       legend.classList.remove('is-gaining', 'is-spending');
     }, 850);
@@ -1024,7 +1461,7 @@
     meter.classList.remove('is-gaining');
     void meter.offsetWidth;
     meter.classList.add('is-gaining');
-    setTimeout(() => meter.classList.remove('is-gaining'), 700);
+    scheduleGameTask(() => meter.classList.remove('is-gaining'), 700);
   }
 
   function reinforcementReward(groups) {
@@ -1079,28 +1516,23 @@
   }
 
   function checkForge() {
-    while (state.forge >= state.forgeTarget) {
-      const cost = state.forgeTarget;
+    while (true) {
+      const slot = syncForgeTarget();
+      const cost = forgeCostFor(slot);
+      if (state.forge < cost) break;
       state.forge -= cost;
-      const slots = ['weapon', 'armor', 'charm'];
-      let slot = state.upgradeMode;
-      if (slot === 'auto') {
-        const minimum = Math.min(...slots.map((candidate) => state.equipment[candidate]));
-        const candidates = slots.filter((candidate) => state.equipment[candidate] === minimum);
-        slot = candidates[state.autoUpgradeIndex % candidates.length];
-        state.autoUpgradeIndex += 1;
-      }
       state.equipment[slot] += 1;
-      state.forgeTarget = Math.min(FORGE_MAX, state.forgeTarget + FORGE_STEP);
+      if (state.upgradeMode === 'auto') state.autoUpgradeIndex += 1;
       if (slot === 'armor') {
         state.wallMax += 90;
         state.wall = Math.min(state.wallMax, state.wall + 90);
       }
-      addLog(`消耗 ${cost} 点补强，${equipmentName(slot)}已按${state.upgradeMode === 'auto' ? '自动策略' : '优先策略'}升级`);
+      addLog(`消耗 ${cost} 点补强，${upgradeSlotLabel(slot)}从 LV.${state.equipment[slot] - 1} 升至 LV.${state.equipment[slot]}${state.upgradeMode === 'auto' ? '；自动策略将重新选择目标' : ''}`);
       showCombatToast('装备升级！', 'forge', 53, 48);
-      setTimeout(() => pulseResource('coin', `-${cost}`, 'spend'), 180);
+      scheduleGameTask(() => pulseResource('coin', `-${cost}`, 'spend'), 180);
       celebrateEquipmentUpgrade(slot, cost);
     }
+    syncForgeTarget();
   }
 
   function celebrateEquipmentUpgrade(slot, cost) {
@@ -1133,7 +1565,7 @@
       spark.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
       spark.style.animationDelay = `${index * 18}ms`;
       card.appendChild(spark);
-      setTimeout(() => spark.remove(), 1050);
+      scheduleGameTask(() => spark.remove(), 1050);
     }
 
     sound.play('forge', .48, .96);
@@ -1141,7 +1573,7 @@
     sound.tone(392, .26, 'triangle', .045, .13);
     sound.tone(587, .34, 'sine', .04, .26);
     sound.tone(784, .42, 'sine', .03, .41);
-    setTimeout(() => {
+    scheduleGameTask(() => {
       banner.classList.remove('is-visible');
       card.classList.remove('is-upgraded');
     }, 1950);
@@ -1202,10 +1634,9 @@
   }
 
   function setUpgradeMode(mode, announce = true) {
-    if (!['auto', 'weapon', 'armor', 'charm'].includes(mode)) return;
+    if (!['auto', ...UPGRADE_SLOTS].includes(mode)) return;
     state.upgradeMode = mode;
-    const names = { auto: '自动 · 均衡补强', weapon: '攻击优先 · 持续生效', armor: '防御优先 · 持续生效', charm: '攻速优先 · 持续生效' };
-    $('#strategyHint').textContent = names[mode];
+    const slot = updateUpgradeTargetUI();
     document.querySelectorAll('.strategy-button').forEach((button) => {
       const active = button.dataset.upgrade === mode;
       button.classList.toggle('is-active', active);
@@ -1213,7 +1644,9 @@
     });
     if (state.started && announce) {
       sound.play('click', .14, 1.08);
-      addLog(`锻造策略切换为「${names[mode].split(' · ')[0]}」`);
+      addLog(`${mode === 'auto' ? '自动策略本次选择' : '锻造目标切换为'}「${upgradeSlotLabel(slot)}」，LV.${state.equipment[slot]}→${state.equipment[slot] + 1} 需要 ${state.forgeTarget} 补强`);
+      if (!state.paused) checkForge();
+      updateUI();
     }
   }
 
@@ -1231,12 +1664,21 @@
 
   function updateMusicButton() {
     const track = music.currentTrack();
+    const nextTrack = MUSIC_TRACKS[(music.trackIndex + 1) % MUSIC_TRACKS.length];
     const action = music.enabled ? '关闭' : '开启';
+    const position = `第 ${music.trackIndex + 1} / ${MUSIC_TRACKS.length} 首`;
+    const trackSummary = `${position}；当前 ${track.title}；下一首 ${nextTrack.title}`;
     els.musicButton.classList.toggle('is-muted', !music.enabled);
     els.musicButton.classList.toggle('is-active', music.playing);
     els.musicButton.setAttribute('aria-pressed', String(music.enabled));
-    els.musicButton.setAttribute('aria-label', `${action} MIDI 军乐曲单；当前 ${track.title}`);
-    els.musicButton.setAttribute('title', `${action} MIDI 军乐曲单 · 当前：${track.title}`);
+    els.musicButton.setAttribute('aria-label', `${action} MIDI 军乐曲单；${trackSummary}`);
+    els.musicButton.setAttribute('title', `${action} MIDI 军乐\n${trackSummary}`);
+    els.nextTrackButton.setAttribute('aria-label', `切换下一首；${trackSummary}`);
+    els.nextTrackButton.setAttribute('title', trackSummary);
+    $('#musicTrackCount').textContent = position;
+    $('#musicCurrentTitle').textContent = track.title;
+    $('#musicNextTitle').textContent = nextTrack.title;
+    $('.music-controls').setAttribute('aria-label', `MIDI 军乐控制；${trackSummary}`);
   }
 
   function upgradeAdvice() {
@@ -1269,6 +1711,7 @@
     $('#wallValue').textContent = Math.max(0, Math.ceil(state.wall));
     $('#wallMaxValue').textContent = state.wallMax;
     $('#wallMeter').style.width = `${Math.max(0, state.wall / state.wallMax) * 100}%`;
+    updateUpgradeTargetUI();
     $('#forgeMeter').style.width = `${Math.min(100, state.forge / state.forgeTarget * 100)}%`;
     $('#forgeProgressText').textContent = `${state.forge} / ${state.forgeTarget}`;
     els.volleyButton.disabled = state.mana < 18 || state.paused || state.gameOver;
@@ -1456,8 +1899,8 @@
     const targets = [...state.enemies].sort((first, second) => first.x - second.x);
     els.fortress.classList.add('is-firing');
     els.fortress.classList.toggle('is-ember-firing', emberCharged);
-    setTimeout(() => els.fortress.classList.remove('is-firing'), 190);
-    if (emberCharged) setTimeout(() => els.fortress.classList.remove('is-ember-firing'), 240);
+    scheduleGameTask(() => els.fortress.classList.remove('is-firing'), 190);
+    if (emberCharged) scheduleGameTask(() => els.fortress.classList.remove('is-ember-firing'), 240);
 
     for (let index = 0; index < shots; index += 1) {
       const target = targets[Math.min(index, targets.length - 1)] || enemy;
@@ -1502,7 +1945,7 @@
     els.projectilesLayer.appendChild(projectile);
 
     const sessionId = state.sessionId;
-    setTimeout(() => {
+    scheduleGameTask(() => {
       projectile.remove();
       if (sessionId !== state.sessionId || !state.enemies.includes(enemy) || state.gameOver) return;
       damageEnemy(enemy, damage, crit);
@@ -1561,7 +2004,7 @@
     impact.style.top = `${y}%`;
     impact.innerHTML = '<i></i><i></i><i></i><i></i>';
     els.impactLayer.appendChild(impact);
-    setTimeout(() => impact.remove(), 720);
+    scheduleGameTask(() => impact.remove(), 720);
   }
 
   function activateRelic(type, source = 'enemy') {
@@ -1601,7 +2044,7 @@
     if (position < 0) return;
     state.enemies.splice(position, 1);
     enemy.el.classList.add('is-dead');
-    setTimeout(() => enemy.el.remove(), 360);
+    scheduleGameTask(() => enemy.el.remove(), 360);
     state.kills += 1;
     const baseScore = enemy.type === 'boss' ? 800 : enemy.type === 'brute' ? 110 : enemy.type === 'assault' ? 90 : enemy.type === 'swift' ? 75 : 55;
     state.score += Math.round(baseScore * DIFFICULTIES[state.difficulty].scoreScale);
@@ -1646,7 +2089,7 @@
     const wave = document.createElement('div');
     wave.className = 'arcane-wave';
     els.battlefield.appendChild(wave);
-    setTimeout(() => wave.remove(), 600);
+    scheduleGameTask(() => wave.remove(), 600);
     const damage = Math.round(42 + totalPower() * .65);
     state.enemies.filter((enemy) => enemy.entered)
       .forEach((enemy) => damageEnemy(enemy, damage, false, { secondary: true, effect: 'arcane' }));
@@ -1717,7 +2160,7 @@
     toast.style.left = `${Math.max(5, Math.min(90, x))}%`;
     toast.style.top = `${Math.max(10, Math.min(85, y))}%`;
     els.toastLayer.appendChild(toast);
-    setTimeout(() => toast.remove(), 900);
+    scheduleGameTask(() => toast.remove(), 900);
   }
 
   function addLog(message) {
@@ -1731,17 +2174,43 @@
     if (!state.started || state.gameOver) return;
     const manual = typeof force !== 'boolean';
     if (manual) sound.play('click', .16, state.paused ? 1.12 : .88);
-    state.paused = typeof force === 'boolean' ? force : !state.paused;
+    const nextPaused = typeof force === 'boolean' ? force : !state.paused;
+    if (nextPaused === state.paused) return;
+    const now = performance.now();
+    if (nextPaused) {
+      closePlaySegment(now);
+      state.paused = true;
+      state.pausedAt = now;
+      pauseGameTasks(now);
+    } else {
+      const pausedDuration = state.pausedAt ? Math.max(0, now - state.pausedAt) : 0;
+      if (pausedDuration) {
+        if (state.nextSpawnAt) state.nextSpawnAt += pausedDuration;
+        if (state.attackReadyAt) state.attackReadyAt += pausedDuration;
+        if (state.intermissionUntil) state.intermissionUntil += pausedDuration;
+        state.enemies.forEach((enemy) => {
+          if (enemy.targetableAt) enemy.targetableAt += pausedDuration;
+          if (enemy.slowUntil) enemy.slowUntil += pausedDuration;
+          if (enemy.armorBreakUntil) enemy.armorBreakUntil += pausedDuration;
+        });
+      }
+      state.paused = false;
+      state.pausedAt = 0;
+      state.playSegmentStartedAt = now;
+      state.lastFrame = now;
+      resumeGameTasks();
+      checkForge();
+    }
     els.pauseButton.querySelector('span').textContent = state.paused ? '▶' : 'Ⅱ';
     els.pauseButton.setAttribute('aria-label', state.paused ? '继续游戏' : '暂停游戏');
     els.boardLock.classList.toggle('is-visible', state.paused);
+    els.boardLock.querySelector('span').textContent = state.paused ? '战局暂停 · 战报已保存' : '战局暂停';
+    els.gameShell.classList.toggle('is-paused', state.paused);
     if (state.paused) {
       const saved = saveProgress('pause');
       music.stop();
-      if (manual && saved) showCombatToast('战报已保存', 'forge', 50, 18);
+      if (manual && !saved) els.boardLock.querySelector('span').textContent = '战局暂停 · 正在保存';
     } else {
-      state.lastFrame = performance.now();
-      state.nextSpawnAt = Math.max(state.nextSpawnAt, performance.now() + 250);
       music.start();
     }
     updateUI();
@@ -1753,7 +2222,9 @@
     sound.init();
     clearSavedProgress();
     state.sessionId += 1;
+    clearGameTasks();
     state.selected = null; state.locked = false; state.started = true; state.paused = false; state.gameOver = false;
+    state.resolution = null; state.pausedAt = 0; state.activePlayMs = 0; state.settlementRecorded = false; state.rulesWasPaused = false;
     state.difficulty = state.selectedDifficulty;
     state.score = 0; state.kills = 0; state.wave = 1; state.emberCharges = 0; state.mana = 0; state.repaired = 0;
     state.forge = 0; state.forgeTarget = FORGE_START; state.equipment = { weapon: 1, armor: 1, charm: 1 };
@@ -1761,7 +2232,7 @@
     state.wallMax = 1120; state.wall = 1120; state.combo = 1; state.enemyId = 0;
     state.waveQueue = 0; state.waveTotal = 0; state.waveSpawned = 0; state.waveBossesRemaining = 0;
     state.waveMatches = 0; state.totalMatches = 0; state.waveProfile = null; state.intermissionUntil = 0;
-    state.attackReadyAt = 0; state.lastFrame = performance.now(); state.lastUiAt = 0; state.pendingSaveReason = null;
+    state.attackReadyAt = 0; state.lastFrame = performance.now(); state.playSegmentStartedAt = state.lastFrame; state.lastUiAt = 0; state.pendingSaveReason = null;
     clearBattleLayers();
     buildBoard();
     renderBoard(new Set(), -1, 'initial');
@@ -1769,9 +2240,12 @@
     els.gameOverModal.classList.remove('is-open');
     els.victoryModal.classList.remove('is-open');
     els.resumeModal.classList.remove('is-open');
+    els.rulesModal.classList.remove('is-open');
     els.introModal.classList.remove('is-open');
     els.introModal.classList.remove('is-first-visit');
     els.boardLock.classList.remove('is-visible');
+    els.boardLock.querySelector('span').textContent = '战局暂停';
+    els.gameShell.classList.remove('is-paused');
     els.pauseButton.querySelector('span').textContent = 'Ⅱ';
     setUpgradeMode('auto', false);
     sound.play('click', .24, 1.2);
@@ -1782,14 +2256,19 @@
   }
 
   function endGame() {
+    if (state.gameOver) return;
+    const now = performance.now();
+    closePlaySegment(now);
+    state.sessionId += 1;
     state.gameOver = true;
     state.paused = true;
+    state.pausedAt = now;
     state.wall = 0;
+    clearGameTasks();
+    els.gameShell.classList.add('is-paused');
     music.stop();
     clearSavedProgress();
-    $('#finalWave').textContent = state.wave;
-    $('#finalKills').textContent = state.kills;
-    $('#finalScore').textContent = state.score;
+    renderFailureSettlement(recordSettlement(false));
     els.gameOverModal.classList.add('is-open');
     sound.tone(164, .38, 'sawtooth', .04);
     sound.tone(116, .52, 'sawtooth', .035, .24);
@@ -1798,11 +2277,19 @@
   }
 
   function completeVictory() {
+    if (state.gameOver) return;
+    const now = performance.now();
+    closePlaySegment(now);
+    state.sessionId += 1;
     state.gameOver = true;
     state.paused = true;
+    state.pausedAt = now;
+    clearGameTasks();
+    els.gameShell.classList.add('is-paused');
     music.stop();
     clearSavedProgress();
     state.score += Math.round(10000 * DIFFICULTIES[state.difficulty].scoreScale);
+    recordSettlement(true);
     $('#victoryKills').textContent = state.kills;
     $('#victoryScore').textContent = state.score;
     els.victoryModal.classList.add('is-open');
@@ -1817,11 +2304,17 @@
     music.stop();
     clearSavedProgress();
     state.sessionId += 1;
+    clearGameTasks();
     state.started = false;
     state.paused = true;
     state.gameOver = false;
+    state.rulesWasPaused = false;
+    state.resolution = null;
+    state.playSegmentStartedAt = 0;
+    els.gameShell.classList.remove('is-paused');
     els.gameOverModal.classList.remove('is-open');
     els.victoryModal.classList.remove('is-open');
+    els.rulesModal.classList.remove('is-open');
     els.introModal.classList.add('is-open', 'is-first-visit');
     $('#startButton small').textContent = `部署 · ${DIFFICULTIES[state.selectedDifficulty].subtitle}`;
   }
@@ -1855,6 +2348,23 @@
     if (!state.gameOver && !state.introWasPaused) togglePause(false);
   }
 
+  function openRules() {
+    if (els.rulesModal.classList.contains('is-open')) return;
+    rulesReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    state.rulesWasPaused = state.paused;
+    if (state.started && !state.gameOver) togglePause(true);
+    els.rulesModal.classList.add('is-open');
+    window.setTimeout(() => $('#rulesClose').focus({ preventScroll: true }), 120);
+  }
+
+  function closeRules() {
+    if (!els.rulesModal.classList.contains('is-open')) return;
+    els.rulesModal.classList.remove('is-open');
+    if (state.started && !state.gameOver && !state.rulesWasPaused) togglePause(false);
+    if (rulesReturnFocus?.isConnected) rulesReturnFocus.focus();
+    rulesReturnFocus = null;
+  }
+
   async function toggleFullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
@@ -1884,20 +2394,30 @@
   $('#victoryRestartButton').addEventListener('click', returnToBriefing);
   $('#introClose').addEventListener('click', closeCampaignOptions);
   $('#helpButton').addEventListener('click', openCampaignOptions);
+  $('#rulesButton').addEventListener('click', openRules);
+  $('#rulesClose').addEventListener('click', closeRules);
+  els.rulesModal.addEventListener('click', (event) => {
+    if (event.target === els.rulesModal) closeRules();
+  });
   document.querySelectorAll('.difficulty-card').forEach((button) => {
     button.addEventListener('click', () => selectDifficulty(button.dataset.difficulty));
   });
   document.querySelectorAll('.strategy-button').forEach((button) => {
     button.addEventListener('click', () => setUpgradeMode(button.dataset.upgrade));
   });
+  document.querySelectorAll('[data-history-filter]').forEach((button) => {
+    button.addEventListener('click', () => setHistoryFilter(button.dataset.historyFilter));
+  });
   els.pauseButton.addEventListener('click', () => togglePause());
   els.musicButton.addEventListener('click', () => music.toggle());
+  els.nextTrackButton.addEventListener('click', () => music.skip());
   els.soundButton.addEventListener('click', () => sound.toggle());
   els.fullscreenButton.addEventListener('click', toggleFullscreen);
   els.volleyButton.addEventListener('click', castVolley);
   document.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'q') castVolley();
-    if (event.key === 'Escape' && state.started && els.introModal.classList.contains('is-open')) closeCampaignOptions();
+    if (event.key === 'Escape' && els.rulesModal.classList.contains('is-open')) closeRules();
+    else if (event.key === 'Escape' && state.started && els.introModal.classList.contains('is-open')) closeCampaignOptions();
     else if (event.key === 'Escape' && state.started) togglePause();
   });
   document.addEventListener('fullscreenchange', updateFullscreenButton);
@@ -1935,6 +2455,29 @@
       savedProgress() {
         return readSavedProgress();
       },
+      history() {
+        return readHistory();
+      },
+      setHistory(records = []) {
+        return writeHistory(records);
+      },
+      forceFailure(values = {}) {
+        state.started = true;
+        state.gameOver = false;
+        state.paused = false;
+        state.pausedAt = 0;
+        state.settlementRecorded = false;
+        state.difficulty = DIFFICULTIES[values.difficulty] ? values.difficulty : state.difficulty;
+        state.wave = Math.floor(safeNumber(values.wave, state.wave, 1, MAX_WAVES));
+        state.score = Math.floor(safeNumber(values.score, state.score, 0));
+        state.kills = Math.floor(safeNumber(values.kills, state.kills, 0));
+        state.totalMatches = Math.floor(safeNumber(values.totalMatches, state.totalMatches, 0));
+        state.repaired = Math.floor(safeNumber(values.repaired, state.repaired, 0));
+        state.activePlayMs = safeNumber(values.activePlayMs, state.activePlayMs, 0);
+        state.playSegmentStartedAt = 0;
+        endGame();
+        return readHistory();
+      },
       musicState() {
         const track = music.currentTrack();
         return {
@@ -1944,7 +2487,13 @@
           trackTitle: track.title,
           trackSource: track.source,
           trackCount: MUSIC_TRACKS.length,
-          playlist: MUSIC_TRACKS.map(({ title, source }) => ({ title, source }))
+          playlist: MUSIC_TRACKS.map(({ title, source, bpm, melody, bass, harmony }) => ({
+            title,
+            source,
+            bpm,
+            steps: melody.length,
+            voicesAligned: melody.length === bass.length && melody.length === harmony.length
+          }))
         };
       },
       advanceMusicTrack() {
@@ -2033,13 +2582,20 @@
           selectedDifficulty: state.selectedDifficulty,
           started: state.started,
           paused: state.paused,
+          gameOver: state.gameOver,
+          locked: state.locked,
+          resolution: state.resolution ? { ...state.resolution } : null,
+          activePlayMs: currentActivePlayMs(),
+          scheduledTasks: gameTasks.size,
           upgradeMode: state.upgradeMode,
+          upgradeTargetSlot: currentUpgradeSlot(),
           wave: state.wave,
           score: state.score,
           kills: state.kills,
           wall: state.wall,
           wallMax: state.wallMax,
           waveMatches: state.waveMatches,
+          totalMatches: state.totalMatches,
           waveProfile: state.waveProfile,
           combatBuff: state.combatBuff ? { ...state.combatBuff } : null,
           combatBuffQueue: state.combatBuffQueue.map((buff) => ({ ...buff })),

@@ -118,9 +118,66 @@ let activeBrowser;
     const after = test.musicState();
     return { before, visited, after, buttonTitle: document.querySelector('#musicButton').title, log: document.querySelector('#battleLog').innerText };
   });
-  if (playlistCycle.before.trackCount !== 4 || new Set(playlistCycle.visited).size !== 4 || playlistCycle.after.trackIndex !== playlistCycle.before.trackIndex || playlistCycle.after.trackTitle !== playlistCycle.before.trackTitle) throw new Error(`MIDI playlist does not cycle through all tracks: ${JSON.stringify(playlistCycle)}`);
-  if (!playlistCycle.before.playlist.every((track) => track.source.includes('公版') || track.source.includes('原创')) || !playlistCycle.buttonTitle.includes(playlistCycle.after.trackTitle) || !playlistCycle.log.includes('军乐换曲')) throw new Error(`MIDI playlist attribution or feedback is incomplete: ${JSON.stringify(playlistCycle)}`);
-  if (!await page.locator('.forge-rule').innerText().then((text) => text.includes('每组 +1') && text.includes('五连 +2') && text.includes('铸币组 +1'))) throw new Error('Reinforcement rules are not explained in the upgrade HUD');
+  if (playlistCycle.before.trackCount < 20 || new Set(playlistCycle.visited).size !== playlistCycle.before.trackCount || playlistCycle.after.trackIndex !== playlistCycle.before.trackIndex || playlistCycle.after.trackTitle !== playlistCycle.before.trackTitle) throw new Error(`MIDI playlist does not cycle through at least 20 distinct tracks: ${JSON.stringify(playlistCycle)}`);
+  if (!playlistCycle.before.playlist.every((track) => (track.source.includes('公版') || track.source.includes('原创')) && track.steps >= 32 && track.voicesAligned && track.bpm >= 90) || !playlistCycle.buttonTitle.includes(playlistCycle.after.trackTitle) || !playlistCycle.log.includes('军乐换曲')) throw new Error(`MIDI playlist attribution, arrangement or feedback is incomplete: ${JSON.stringify(playlistCycle)}`);
+  const beforeManualSkip = await page.evaluate(() => window.__runeRampartTest.musicState());
+  await page.locator('#nextTrackButton').click();
+  await page.waitForTimeout(120);
+  const afterManualSkip = await page.evaluate(() => ({
+    music: window.__runeRampartTest.musicState(),
+    position: document.querySelector('#musicTrackCount').textContent,
+    currentTitle: document.querySelector('#musicCurrentTitle').textContent,
+    nextTitle: document.querySelector('#musicNextTitle').textContent,
+    label: document.querySelector('#nextTrackButton').getAttribute('aria-label'),
+    persisted: localStorage.getItem('runeRampart.musicTrack'),
+    paused: window.__runeRampartTest.snapshot().paused,
+    iconOnly: !document.querySelector('#nextTrackButton b') && document.querySelector('#nextTrackButton').textContent.trim() === '»'
+  }));
+  const expectedTrackIndex = (beforeManualSkip.trackIndex + 1) % beforeManualSkip.trackCount;
+  const expectedNextTitle = afterManualSkip.music.playlist[(expectedTrackIndex + 1) % beforeManualSkip.trackCount].title;
+  if (afterManualSkip.music.trackIndex !== expectedTrackIndex || !afterManualSkip.music.playing || afterManualSkip.position !== `第 ${expectedTrackIndex + 1} / ${beforeManualSkip.trackCount} 首` || afterManualSkip.currentTitle !== afterManualSkip.music.trackTitle || afterManualSkip.nextTitle !== expectedNextTitle || !afterManualSkip.label.includes(afterManualSkip.music.trackTitle) || !afterManualSkip.label.includes(expectedNextTitle) || afterManualSkip.persisted !== String(expectedTrackIndex) || afterManualSkip.paused || !afterManualSkip.iconOnly) throw new Error(`Non-blocking icon-only next-track control failed: ${JSON.stringify({ beforeManualSkip, afterManualSkip })}`);
+  await page.locator('#nextTrackButton').hover();
+  await page.waitForTimeout(180);
+  const musicTip = await page.locator('#musicHoverTip').evaluate((node) => ({
+    opacity: Number(getComputedStyle(node).opacity),
+    visible: getComputedStyle(node).visibility,
+    text: node.textContent.replace(/\s+/g, ' ').trim(),
+    fontSizes: [...node.querySelectorAll('*')].map((child) => Number.parseFloat(getComputedStyle(child).fontSize))
+  }));
+  if (musicTip.opacity < .99 || musicTip.visible !== 'visible' || !musicTip.text.includes(afterManualSkip.position) || !musicTip.text.includes(afterManualSkip.currentTitle) || !musicTip.text.includes(afterManualSkip.nextTitle) || musicTip.fontSizes.some((size) => size < 14)) throw new Error(`Music hover tip is incomplete or illegible: ${JSON.stringify(musicTip)}`);
+  await page.mouse.move(0, 0);
+  if (await page.locator('.forge-rule').count() !== 0) throw new Error('Detailed reinforcement rules still occupy the compact upgrade HUD');
+  await page.locator('#rulesButton').click();
+  await page.locator('#rulesModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+  await page.waitForTimeout(180);
+  const rulesView = await page.evaluate(() => {
+    const modal = document.querySelector('#rulesModal');
+    const save = JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null');
+    return {
+      sectionCount: modal.querySelectorAll('.rule-section').length,
+      text: modal.textContent.replace(/\s+/g, ' ').trim(),
+      paused: window.__runeRampartTest.snapshot().paused,
+      musicPlaying: window.__runeRampartTest.musicState().playing,
+      saveReason: save?.reason,
+      savePaused: save?.paused,
+      boardLocked: document.querySelector('#boardLock').classList.contains('is-visible'),
+      focused: document.activeElement?.id,
+      conciseBoardHint: document.querySelector('.board-hint').textContent.replace(/\s+/g, ' ').trim()
+    };
+  });
+  if (rulesView.sectionCount !== 6 || !rulesView.text.includes('四连额外 +1') || !rulesView.text.includes('五连及以上额外 +2') || !rulesView.text.includes('铸币组再额外 +1') || !rulesView.text.includes('按自身等级计算') || !rulesView.text.includes('彩蛋越稀有') || !rulesView.text.includes('立即冻结')) throw new Error(`Central rules dialog is incomplete: ${JSON.stringify(rulesView)}`);
+  if (!rulesView.paused || rulesView.musicPlaying || rulesView.saveReason !== 'pause' || !rulesView.savePaused || !rulesView.boardLocked || rulesView.focused !== 'rulesClose') throw new Error(`Opening rules did not pause and save safely: ${JSON.stringify(rulesView)}`);
+  if (rulesView.conciseBoardHint !== '操作：交换相邻符文，连成三枚即可消除') throw new Error(`Board hint is still too verbose: ${rulesView.conciseBoardHint}`);
+  await assertMinimumFont(page, 'Rules dialog');
+  await page.screenshot({ path: path.join(output, 'rules.png'), fullPage: false });
+  await page.locator('#rulesClose').click();
+  await page.locator('#rulesModal').waitFor({ state: 'hidden', timeout: 500 });
+  const rulesClosed = await page.evaluate(() => ({
+    paused: window.__runeRampartTest.snapshot().paused,
+    musicPlaying: window.__runeRampartTest.musicState().playing,
+    focused: document.activeElement?.id
+  }));
+  if (rulesClosed.paused || !rulesClosed.musicPlaying || rulesClosed.focused !== 'rulesButton') throw new Error(`Closing rules did not restore the running battle: ${JSON.stringify(rulesClosed)}`);
   const reinforcementRules = await page.evaluate(() => {
     const reward = window.__runeRampartTest.reinforcementReward;
     return {
@@ -150,6 +207,16 @@ let activeBrowser;
   );
   if (equipmentLevelTotal !== 4 || await page.locator('#weaponLevel').innerText() !== '2') throw new Error(`Attack-priority upgrade did not apply: ${equipmentLevelTotal}`);
   if (!await page.locator('#upgradeEquipmentLevel').innerText().then((text) => text.includes('消耗 26 补强'))) throw new Error('Upgrade banner does not explain reinforcement consumption');
+  const upgradedWeaponTarget = await page.evaluate(() => window.__runeRampartTest.snapshot());
+  if (upgradedWeaponTarget.upgradeTargetSlot !== 'weapon' || upgradedWeaponTarget.forgeTarget <= 26 || !await page.locator('#forgeTargetName').innerText().then((text) => text.includes('攻击 LV.2→3'))) throw new Error(`Attack cost did not rise with its own level: ${JSON.stringify(upgradedWeaponTarget)}`);
+  await page.locator('[data-upgrade="armor"]').click();
+  const armorTarget = await page.evaluate(() => window.__runeRampartTest.snapshot());
+  if (armorTarget.upgradeTargetSlot !== 'armor' || armorTarget.forgeTarget !== 26 || !await page.locator('#forgeTargetName').innerText().then((text) => text.includes('防御 LV.1→2'))) throw new Error(`Switching priority did not reveal the defense-specific cost: ${JSON.stringify(armorTarget)}`);
+  await page.locator('[data-upgrade="auto"]').click();
+  const autoTarget = await page.evaluate(() => ({ snapshot: window.__runeRampartTest.snapshot(), hint: document.querySelector('#strategyHint').textContent }));
+  if (autoTarget.snapshot.upgradeTargetSlot !== 'armor' || autoTarget.snapshot.forgeTarget !== 26 || !autoTarget.hint.includes('本次防御')) throw new Error(`Auto mode did not internally choose and display its current target: ${JSON.stringify(autoTarget)}`);
+  await page.locator('[data-upgrade="weapon"]').click();
+  if (!await page.locator('#rulesModal').textContent().then((text) => text.includes('等级越高费用越高') && text.includes('升级后再重选'))) throw new Error('Per-item upgrade cost rules are missing from the central rules dialog');
   const loadoutParent = await page.locator('#weaponCard').evaluate((node) => node.parentElement?.parentElement?.className);
   if (!loadoutParent?.includes('compact-arsenal')) throw new Error('Full weapon values are not grouped below the upgrade console');
   const weaponPower = (await page.locator('#weaponStat').innerText()).match(/\d+/)?.[0];
@@ -238,7 +305,30 @@ let activeBrowser;
   await page.locator('.rune-tile').nth(first).click();
   await page.locator('.rune-tile').nth(second).click();
   await page.locator('.match-primed').first().waitFor({ state: 'visible', timeout: 700 });
-  await page.waitForTimeout(140);
+  await page.waitForTimeout(90);
+  await page.locator('#pauseButton').click();
+  const frozenChain = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    save: JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null'),
+    animationState: getComputedStyle(document.querySelector('.match-primed')).animationPlayState,
+    shellPaused: document.querySelector('#gameShell').classList.contains('is-paused'),
+    lockText: document.querySelector('#boardLock').textContent
+  }));
+  if (!frozenChain.snapshot.paused || !frozenChain.snapshot.locked || frozenChain.snapshot.resolution?.kind !== 'resolve' || frozenChain.save?.reason !== 'pause' || frozenChain.save?.resolution?.kind !== 'resolve' || frozenChain.animationState !== 'paused' || !frozenChain.shellPaused || !frozenChain.lockText.includes('已保存')) {
+    throw new Error(`In-flight cascade did not pause and save immediately: ${JSON.stringify(frozenChain)}`);
+  }
+  await page.waitForTimeout(900);
+  const stillFrozenChain = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    primed: document.querySelectorAll('.match-primed').length,
+    dropping: document.querySelectorAll('.is-dropping').length
+  }));
+  if (stillFrozenChain.snapshot.score !== frozenChain.snapshot.score || stillFrozenChain.snapshot.forge !== frozenChain.snapshot.forge || stillFrozenChain.snapshot.board.join(',') !== frozenChain.snapshot.board.join(',') || stillFrozenChain.snapshot.resolution?.phase !== frozenChain.snapshot.resolution?.phase || !stillFrozenChain.primed || stillFrozenChain.dropping) {
+    throw new Error(`Paused cascade continued in the background: ${JSON.stringify({ frozenChain, stillFrozenChain })}`);
+  }
+  await page.screenshot({ path: path.join(output, 'animation-paused.png'), fullPage: false });
+  await page.locator('#pauseButton').click();
+  await page.waitForTimeout(50);
   await page.screenshot({ path: path.join(output, 'animation-charge.png'), fullPage: false });
   await page.locator('.matched').first().waitFor({ state: 'attached', timeout: 900 });
   await page.waitForTimeout(90);
@@ -369,10 +459,18 @@ let activeBrowser;
   await assertMinimumFont(resumePage, 'Mobile resume prompt');
   await resumePage.screenshot({ path: path.join(output, 'mobile-resume.png'), fullPage: false });
   await resumePage.locator('#resumeButton').click();
-  await resumePage.waitForTimeout(120);
-  const restoredState = await resumePage.evaluate(() => ({ snapshot: window.__runeRampartTest.snapshot(), music: window.__runeRampartTest.musicState() }));
-  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Saved campaign did not restore faithfully: ${JSON.stringify({ pausedState, restoredState })}`);
-  if (!restoredState.music.enabled || !restoredState.music.playing) throw new Error(`MIDI music did not resume with the restored battle: ${JSON.stringify(restoredState.music)}`);
+  await resumePage.waitForTimeout(40);
+  const restoredState = await resumePage.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    music: window.__runeRampartTest.musicState(),
+    log: document.querySelector('#battleLog').innerText,
+    lockVisible: document.querySelector('#boardLock').classList.contains('is-visible')
+  }));
+  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.lockVisible || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Continue did not immediately resume the saved campaign: ${JSON.stringify({ pausedState, restoredState })}`);
+  if (!restoredState.music.enabled || !restoredState.music.playing) throw new Error(`Music did not resume immediately: ${JSON.stringify(restoredState)}`);
+  await resumePage.waitForTimeout(80);
+  const runningAfterRestore = await resumePage.evaluate(() => window.__runeRampartTest.snapshot());
+  if (runningAfterRestore.paused || runningAfterRestore.activePlayMs <= restoredState.snapshot.activePlayMs + 40) throw new Error(`Game clock did not continue after restoring: ${JSON.stringify({ restoredState, runningAfterRestore })}`);
   await resumePage.close();
 
   const restartPage = await page.context().newPage({ viewport: { width: 980, height: 820 } });
@@ -511,6 +609,30 @@ let activeBrowser;
   if (Math.abs(landscapeMobileFit.widthRatio - landscapeMobileFit.heightRatio) > .002) throw new Error(`Mobile landscape canvas is not scaled uniformly: ${JSON.stringify(landscapeMobileFit)}`);
   await page.screenshot({ path: path.join(output, 'mobile-landscape.png'), fullPage: false });
 
+  await page.evaluate(() => document.querySelector('#rulesButton').click());
+  await page.locator('#rulesModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+  await page.waitForTimeout(180);
+  const mobileRules = await page.evaluate(() => {
+    const card = document.querySelector('.rules-card');
+    const rect = card.getBoundingClientRect();
+    const forgeLabel = document.querySelector('.forge-meter-wrap > span');
+    return {
+      rect: rect.toJSON(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      horizontalFit: card.scrollWidth <= card.clientWidth + 1,
+      sectionCount: card.querySelectorAll('.rule-section').length,
+      paused: window.__runeRampartTest.snapshot().paused,
+      forgeLabelFits: forgeLabel.scrollWidth <= forgeLabel.clientWidth + 1,
+      hasInlineRule: Boolean(document.querySelector('.forge-rule'))
+    };
+  });
+  if (!mobileRules.horizontalFit || mobileRules.sectionCount !== 6 || !mobileRules.paused || !mobileRules.forgeLabelFits || mobileRules.hasInlineRule || mobileRules.rect.left < -2 || mobileRules.rect.right > mobileRules.viewportWidth + 2 || mobileRules.rect.top < -2 || mobileRules.rect.bottom > mobileRules.viewportHeight + 2) throw new Error(`Small-screen rules or upgrade layout overflows: ${JSON.stringify(mobileRules)}`);
+  await assertMinimumFont(page, 'Mobile landscape rules');
+  await page.screenshot({ path: path.join(output, 'mobile-rules.png'), fullPage: false });
+  await page.locator('#rulesClose').click();
+  if (await page.evaluate(() => window.__runeRampartTest.snapshot().paused)) throw new Error('Closing mobile rules did not resume the battle');
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(300);
   const portraitGuard = await page.evaluate(() => ({
@@ -537,6 +659,63 @@ let activeBrowser;
   await page.locator('#victoryModal.is-open').waitFor({ state: 'visible', timeout: 500 });
   await page.locator('#victoryRestartButton').click();
   await page.locator('#introModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+
+  await page.setViewportSize({ width: 1120, height: 900 });
+  await page.waitForTimeout(240);
+  await page.evaluate(() => window.__runeRampartTest.setHistory([
+    { id: 'master-low', achievedAt: 4000, difficulty: 'master', clearedWaves: 0, settlementScore: 1, baseScore: 1, kills: 0, totalMatches: 0, activePlayMs: 1000 },
+    { id: 'veteran-late', achievedAt: 3000, difficulty: 'veteran', clearedWaves: 10, settlementScore: 18000, baseScore: 2800, kills: 20, totalMatches: 12, activePlayMs: 100000 },
+    { id: 'veteran-early', achievedAt: 2000, difficulty: 'veteran', clearedWaves: 10, settlementScore: 18000, baseScore: 2800, kills: 20, totalMatches: 12, activePlayMs: 100000 },
+    { id: 'rookie-high', achievedAt: 1000, difficulty: 'rookie', clearedWaves: 99, settlementScore: 999999, baseScore: 999999, kills: 999, totalMatches: 999, activePlayMs: 999000 }
+  ]));
+  await page.locator('[data-difficulty="veteran"]').click();
+  await page.locator('#startButton').click();
+  await page.waitForTimeout(120);
+  const settlementHistory = await page.evaluate(() => window.__runeRampartTest.forceFailure({
+    difficulty: 'veteran', wave: 13, score: 5000, kills: 42, totalMatches: 18, repaired: 260, activePlayMs: 125000
+  }));
+  await page.locator('#gameOverModal.is-open').waitFor({ state: 'visible', timeout: 500 });
+  const settlementView = await page.evaluate(() => ({
+    rank: document.querySelector('#finalRank').textContent,
+    difficulty: document.querySelector('#finalDifficulty').textContent,
+    wave: document.querySelector('#finalWave').textContent,
+    kills: document.querySelector('#finalKills').textContent,
+    matches: document.querySelector('#finalMatches').textContent,
+    time: document.querySelector('#finalTime').textContent,
+    score: document.querySelector('#finalScore').textContent,
+    breakdown: document.querySelector('#finalScoreBreakdown').textContent,
+    currentRows: document.querySelectorAll('#historyRows tr.is-current').length,
+    rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent))
+  }));
+  if (settlementView.rank !== '#02' || settlementView.difficulty !== '老兵' || settlementView.wave !== '12 / 100' || settlementView.kills !== '42' || settlementView.matches !== '18' || settlementView.time !== '02:05' || settlementView.score.replace(/\D/g, '') !== '23250' || !settlementView.breakdown.includes('基础军功 5,000') || !settlementView.breakdown.includes('波次 18,000') || settlementView.currentRows !== 1) {
+    throw new Error(`Failure settlement does not explain the result: ${JSON.stringify(settlementView)}`);
+  }
+  const historyIds = settlementHistory.map((record) => record.id);
+  if (historyIds[0] !== 'master-low' || historyIds[1] === 'veteran-early' || historyIds.indexOf('veteran-early') > historyIds.indexOf('veteran-late') || historyIds.at(-1) !== 'rookie-high') {
+    throw new Error(`History ranking does not follow difficulty, achievement and earlier-time priority: ${JSON.stringify(settlementHistory)}`);
+  }
+  if (settlementView.rows[0]?.[1] !== '大佬' || settlementView.rows[1]?.[1] !== '老兵' || settlementView.rows.at(-1)?.[1] !== '新手') throw new Error(`History ranking UI order is incorrect: ${JSON.stringify(settlementView.rows)}`);
+  await page.locator('[data-history-filter="veteran"]').click();
+  const veteranRanking = await page.evaluate(() => ({
+    active: document.querySelector('[data-history-filter="veteran"]').getAttribute('aria-pressed'),
+    count: document.querySelector('#historyCount').textContent,
+    rows: [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)),
+    currentRank: document.querySelector('#historyRows tr.is-current td')?.textContent
+  }));
+  if (veteranRanking.active !== 'true' || veteranRanking.count !== '3 条战报' || veteranRanking.rows.some((row) => row[1] !== '老兵') || veteranRanking.rows[0]?.[0] !== '#01' || veteranRanking.currentRank !== '#01') throw new Error(`Difficulty-specific ranking did not rerank veteran records: ${JSON.stringify(veteranRanking)}`);
+  await page.locator('[data-history-filter="master"]').click();
+  const masterRanking = await page.evaluate(() => [...document.querySelectorAll('#historyRows tr')].map((row) => [...row.cells].map((cell) => cell.textContent)));
+  if (masterRanking.length !== 1 || masterRanking[0][0] !== '#01' || masterRanking[0][1] !== '大佬') throw new Error(`Master-only ranking is incorrect: ${JSON.stringify(masterRanking)}`);
+  await page.locator('[data-history-filter="all"]').click();
+  if (await page.locator('#historyRows tr').count() !== 5) throw new Error('Overall ranking did not return after difficulty filtering');
+  await assertMinimumFont(page, 'Failure settlement');
+  await page.screenshot({ path: path.join(output, 'failure-settlement.png'), fullPage: false });
+
+  const historyPage = await page.context().newPage({ viewport: { width: 1120, height: 900 } });
+  await historyPage.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
+  const persistedHistory = await historyPage.evaluate(() => window.__runeRampartTest.history());
+  if (persistedHistory.map((record) => record.id).join(',') !== historyIds.join(',')) throw new Error(`Local ranking did not persist after reload: ${JSON.stringify({ historyIds, persistedHistory })}`);
+  await historyPage.close();
 
   if (errors.length) throw new Error(errors.join('\n'));
   console.log(`PASS score=${afterScore} enemies=${await page.locator('.enemy').count()} errors=0`);
