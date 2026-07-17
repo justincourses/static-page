@@ -74,7 +74,8 @@ let activeBrowser;
   const executablePath = process.env.CHROME_PATH || (fs.existsSync(defaultChromePath) ? defaultChromePath : undefined);
   const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
   activeBrowser = browser;
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1050 }, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1050 }, deviceScaleFactor: 1 });
+  const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(`console: ${message.text()}`); });
@@ -93,6 +94,7 @@ let activeBrowser;
   await page.screenshot({ path: path.join(output, 'welcome.png'), fullPage: false });
   await page.locator('[data-difficulty="veteran"]').click();
   if (!await page.locator('[data-difficulty="veteran"]').evaluate((node) => node.classList.contains('is-selected'))) throw new Error('Veteran difficulty was not selected');
+  if (await page.evaluate(() => localStorage.getItem('runeRampart.difficulty')) !== 'veteran') throw new Error('Difficulty selection was not persisted');
   await page.locator('#startButton').click();
   await page.waitForTimeout(700);
 
@@ -100,8 +102,12 @@ let activeBrowser;
   await assertMinimumFont(page, 'Desktop game');
   if (await page.locator('#waveValue').innerText() !== '001') throw new Error('Wave one did not start');
   if (await page.locator('#difficultyValue').innerText() !== '老兵') throw new Error('Selected difficulty was not applied');
+  const initialCheckpoint = await page.evaluate(() => JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null'));
+  if (initialCheckpoint?.reason !== 'wave' || initialCheckpoint.wave !== 1 || initialCheckpoint.difficulty !== 'veteran') throw new Error(`Wave-start checkpoint was not saved: ${JSON.stringify(initialCheckpoint)}`);
   if (await page.locator('#fullscreenButton').getAttribute('aria-label') !== '进入全屏') throw new Error('Fullscreen control is not ready');
   if (await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound should start enabled');
+  if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'true') throw new Error('MIDI music should start enabled');
+  if (!await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music sequencer did not start with the battle');
   if (!await page.locator('.forge-rule').innerText().then((text) => text.includes('每组 +1') && text.includes('五连 +2') && text.includes('铸币组 +1'))) throw new Error('Reinforcement rules are not explained in the upgrade HUD');
   const reinforcementRules = await page.evaluate(() => {
     const reward = window.__runeRampartTest.reinforcementReward;
@@ -116,6 +122,11 @@ let activeBrowser;
   await page.locator('#soundButton').click();
   if (!await page.locator('#soundButton').evaluate((node) => node.classList.contains('is-muted'))) throw new Error('Sound mute toggle failed');
   await page.locator('#soundButton').click();
+  await page.locator('#musicButton').click();
+  if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'false' || await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music toggle did not stop playback');
+  if (await page.evaluate(() => localStorage.getItem('runeRampart.music')) !== 'false') throw new Error('MIDI music setting was not persisted');
+  await page.locator('#musicButton').click();
+  if (await page.locator('#musicButton').getAttribute('aria-pressed') !== 'true' || !await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music toggle did not resume playback');
   await page.screenshot({ path: path.join(output, 'desktop.png'), fullPage: true });
 
   await page.locator('[data-upgrade="weapon"]').click();
@@ -176,16 +187,23 @@ let activeBrowser;
     window.__runeRampartTest.setEmberCharges(2);
     const before = document.querySelectorAll('.projectile').length;
     const burst = window.__runeRampartTest.fireBurst();
+    const projectile = document.querySelectorAll('.projectile')[before];
+    const muzzle = document.querySelector('.muzzle-anchor').getBoundingClientRect();
+    const layer = document.querySelector('#projectilesLayer').getBoundingClientRect();
+    const muzzlePoint = { x: muzzle.left + muzzle.width / 2 - layer.left, y: muzzle.top + muzzle.height / 2 - layer.top };
+    const projectilePoint = { x: Number.parseFloat(projectile.style.left), y: Number.parseFloat(projectile.style.top) };
     return {
       ...burst,
       projectilesAdded: document.querySelectorAll('.projectile').length - before,
       emberProjectiles: document.querySelectorAll('.projectile.is-ember-charged').length,
       emberHud: document.querySelector('#emberValue').textContent,
-      spendFeedback: document.querySelector('.legend-item.ember .resource-delta.spend')?.textContent
+      spendFeedback: document.querySelector('.legend-item.ember .resource-delta.spend')?.textContent,
+      muzzleError: Math.hypot(muzzlePoint.x - projectilePoint.x, muzzlePoint.y - projectilePoint.y)
     };
   });
   if (burstResult.volleySize !== 2 || burstResult.projectilesAdded < 2) throw new Error(`Attack-speed multishot did not render: ${JSON.stringify(burstResult)}`);
   if (!burstResult.emberCharged || burstResult.emberCharges !== 1 || burstResult.emberProjectiles < 2 || burstResult.emberHud !== '1' || burstResult.spendFeedback !== '-1') throw new Error(`Ember gain/consumption is not perceptible: ${JSON.stringify(burstResult)}`);
+  if (burstResult.muzzleError > 1) throw new Error(`Projectile does not originate at the cannon muzzle: ${JSON.stringify(burstResult)}`);
   await page.screenshot({ path: path.join(output, 'multishot.png'), fullPage: false });
 
   const beforeScore = Number(await page.locator('#scoreValue').innerText());
@@ -284,7 +302,49 @@ let activeBrowser;
   await page.screenshot({ path: path.join(output, 'enemy-dossier.png'), fullPage: false });
   await page.locator('#pauseButton').click();
   if (!await page.locator('#boardLock').evaluate((node) => node.classList.contains('is-visible'))) throw new Error('Pause lock is not visible');
+  if (await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music should pause with the battle');
+  await page.waitForFunction(() => {
+    const save = JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null');
+    return save?.reason === 'pause';
+  }, null, { timeout: 3000 });
+  const pausedState = await page.evaluate(() => ({
+    snapshot: window.__runeRampartTest.snapshot(),
+    save: JSON.parse(localStorage.getItem('runeRampart.progress.v1') || 'null')
+  }));
+  if (pausedState.save?.reason !== 'pause' || pausedState.save.wave !== pausedState.snapshot.wave || pausedState.save.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Pause checkpoint is incomplete: ${JSON.stringify(pausedState)}`);
+
+  const resumePage = await page.context().newPage({ viewport: { width: 980, height: 820 } });
+  resumePage.on('pageerror', (error) => errors.push(`resume pageerror: ${error.message}`));
+  resumePage.on('console', (message) => { if (message.type() === 'error') errors.push(`resume console: ${message.text()}`); });
+  await resumePage.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
+  if (!await resumePage.locator('#resumeModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Saved campaign prompt did not open on reload');
+  if (await resumePage.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Difficulty briefing should wait for the resume decision');
+  if (await resumePage.locator('#resumeDifficulty').innerText() !== '老兵' || !await resumePage.locator('#resumeWave').innerText().then((text) => text.includes(String(pausedState.snapshot.wave).padStart(3, '0')))) throw new Error('Resume summary does not describe the saved campaign');
+  await assertMinimumFont(resumePage, 'Resume prompt');
+  await resumePage.screenshot({ path: path.join(output, 'resume-prompt.png'), fullPage: false });
+  await resumePage.setViewportSize({ width: 390, height: 844 });
+  await resumePage.waitForTimeout(180);
+  const mobileResumeFits = await resumePage.locator('.resume-card').evaluate((node) => node.scrollWidth <= node.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1);
+  if (!mobileResumeFits) throw new Error('Mobile resume prompt overflows horizontally');
+  await assertMinimumFont(resumePage, 'Mobile resume prompt');
+  await resumePage.screenshot({ path: path.join(output, 'mobile-resume.png'), fullPage: false });
+  await resumePage.locator('#resumeButton').click();
+  await resumePage.waitForTimeout(120);
+  const restoredState = await resumePage.evaluate(() => ({ snapshot: window.__runeRampartTest.snapshot(), music: window.__runeRampartTest.musicState() }));
+  if (!restoredState.snapshot.started || restoredState.snapshot.paused || restoredState.snapshot.difficulty !== pausedState.snapshot.difficulty || restoredState.snapshot.wave !== pausedState.snapshot.wave || restoredState.snapshot.wall !== pausedState.snapshot.wall || restoredState.snapshot.forge !== pausedState.snapshot.forge || restoredState.snapshot.board.join(',') !== pausedState.snapshot.board.join(',')) throw new Error(`Saved campaign did not restore faithfully: ${JSON.stringify({ pausedState, restoredState })}`);
+  if (!restoredState.music.enabled || !restoredState.music.playing) throw new Error(`MIDI music did not resume with the restored battle: ${JSON.stringify(restoredState.music)}`);
+  await resumePage.close();
+
+  const restartPage = await page.context().newPage({ viewport: { width: 980, height: 820 } });
+  await restartPage.goto('http://127.0.0.1:4173/?testMode=1', { waitUntil: 'networkidle' });
+  if (!await restartPage.locator('#resumeModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Reloaded campaign no longer offers restart/continue choice');
+  await restartPage.locator('#discardSaveButton').click();
+  if (!await restartPage.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Restart choice did not return to campaign briefing');
+  if (!await restartPage.locator('[data-difficulty="veteran"]').evaluate((node) => node.classList.contains('is-selected'))) throw new Error('Restart briefing did not retain the last difficulty');
+  if (await restartPage.evaluate(() => localStorage.getItem('runeRampart.progress.v1')) !== null) throw new Error('Restart choice did not archive the old checkpoint');
+  await restartPage.close();
   await page.locator('#pauseButton').click();
+  if (!await page.evaluate(() => window.__runeRampartTest.musicState().playing)) throw new Error('MIDI music did not resume after unpausing');
 
   await page.locator('#helpButton').click();
   if (!await page.locator('#introModal').evaluate((node) => node.classList.contains('is-open'))) throw new Error('Campaign options did not reopen');

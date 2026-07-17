@@ -10,6 +10,13 @@
   const FORGE_START = 26;
   const FORGE_STEP = 3;
   const FORGE_MAX = 56;
+  const SAVE_VERSION = 1;
+  const STORAGE_KEYS = {
+    difficulty: 'runeRampart.difficulty',
+    muted: 'runeRampart.muted',
+    music: 'runeRampart.music',
+    progress: 'runeRampart.progress.v1'
+  };
   const TYPES = ['ember', 'mana', 'moss', 'coin'];
   const SYMBOLS = { ember: '◆', mana: '✦', moss: '⬟', coin: '●' };
   const TYPE_NAMES = { ember: '红曜石', mana: '蓝晶', moss: '绿晶', coin: '铸币' };
@@ -53,6 +60,15 @@
   };
 
   const $ = (selector) => document.querySelector(selector);
+  const readStorage = (key, fallback = null) => {
+    try { return localStorage.getItem(key) ?? fallback; } catch (error) { return fallback; }
+  };
+  const writeStorage = (key, value) => {
+    try { localStorage.setItem(key, value); return true; } catch (error) { return false; }
+  };
+  const removeStorage = (key) => {
+    try { localStorage.removeItem(key); } catch (error) { /* Storage can be unavailable in private contexts. */ }
+  };
   const els = {
     board: $('#matchBoard'),
     boardLock: $('#boardLock'),
@@ -66,10 +82,12 @@
     battleLog: $('#battleLog'),
     waveAnnouncement: $('#waveAnnouncement'),
     introModal: $('#introModal'),
+    resumeModal: $('#resumeModal'),
     gameOverModal: $('#gameOverModal'),
     victoryModal: $('#victoryModal'),
     pauseButton: $('#pauseButton'),
     fullscreenButton: $('#fullscreenButton'),
+    musicButton: $('#musicButton'),
     soundButton: $('#soundButton'),
     boardEffects: $('#boardEffects'),
     cascadeCallout: $('#cascadeCallout'),
@@ -79,7 +97,7 @@
   };
 
   const sound = {
-    muted: localStorage.getItem('runeRampart.muted') === 'true',
+    muted: readStorage(STORAGE_KEYS.muted) === 'true',
     context: null,
     files: {
       click: './assets/audio/ui/click1.ogg',
@@ -144,8 +162,102 @@
         this.play('click', .2, .85);
         this.muted = true;
       }
-      localStorage.setItem('runeRampart.muted', String(this.muted));
+      writeStorage(STORAGE_KEYS.muted, String(this.muted));
       updateSoundButton();
+    }
+  };
+
+  const music = {
+    enabled: readStorage(STORAGE_KEYS.music, 'true') !== 'false',
+    playing: false,
+    timer: 0,
+    master: null,
+    filter: null,
+    step: 0,
+    nextNoteAt: 0,
+    bpm: 104,
+    melody: [74, null, 77, 76, 74, null, 72, 69, 70, null, 74, 72, 69, null, 67, 65, 69, null, 72, 74, 77, null, 76, 72, 74, null, 72, 69, 67, null, 69, 72],
+    bass: [38, null, null, null, 38, null, 45, null, 41, null, null, null, 36, null, 43, null, 38, null, null, null, 34, null, 41, null, 36, null, null, null, 33, null, 36, null],
+    harmony: [62, null, null, null, null, null, 60, null, 58, null, null, null, 57, null, 55, null, 57, null, null, null, 62, null, 60, null, 58, null, null, null, 55, null, 57, null],
+
+    midiToFrequency(note) {
+      return 440 * (2 ** ((note - 69) / 12));
+    },
+
+    playNote(note, when, duration, type, volume) {
+      if (!this.master || !sound.context || note === null) return;
+      const oscillator = sound.context.createOscillator();
+      const gain = sound.context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(this.midiToFrequency(note), when);
+      gain.gain.setValueAtTime(.0001, when);
+      gain.gain.exponentialRampToValueAtTime(volume, when + .025);
+      gain.gain.exponentialRampToValueAtTime(.0001, when + duration);
+      oscillator.connect(gain).connect(this.master);
+      oscillator.start(when);
+      oscillator.stop(when + duration + .03);
+    },
+
+    schedule() {
+      if (!this.playing || !sound.context) return;
+      const stepLength = 60 / this.bpm / 2;
+      while (this.nextNoteAt < sound.context.currentTime + .45) {
+        const index = this.step % this.melody.length;
+        this.playNote(this.melody[index], this.nextNoteAt, stepLength * .78, 'triangle', .018);
+        this.playNote(this.bass[index], this.nextNoteAt, stepLength * 1.65, 'square', .008);
+        this.playNote(this.harmony[index], this.nextNoteAt, stepLength * 1.25, 'sine', .006);
+        this.nextNoteAt += stepLength;
+        this.step = (this.step + 1) % this.melody.length;
+      }
+    },
+
+    start() {
+      if (!this.enabled || this.playing || !state.started || state.paused || state.gameOver) return;
+      sound.init();
+      if (!sound.context) return;
+      this.master = sound.context.createGain();
+      this.filter = sound.context.createBiquadFilter();
+      this.filter.type = 'lowpass';
+      this.filter.frequency.value = 2400;
+      this.master.gain.value = .9;
+      this.master.connect(this.filter).connect(sound.context.destination);
+      this.playing = true;
+      this.nextNoteAt = sound.context.currentTime + .06;
+      this.schedule();
+      this.timer = window.setInterval(() => this.schedule(), 100);
+      updateMusicButton();
+    },
+
+    stop() {
+      window.clearInterval(this.timer);
+      this.timer = 0;
+      const master = this.master;
+      if (master && sound.context) {
+        const now = sound.context.currentTime;
+        master.gain.cancelScheduledValues(now);
+        master.gain.setTargetAtTime(.0001, now, .045);
+        window.setTimeout(() => {
+          try { master.disconnect(); } catch (error) { /* Already disconnected. */ }
+        }, 260);
+      }
+      this.master = null;
+      this.filter = null;
+      this.playing = false;
+      updateMusicButton();
+    },
+
+    toggle() {
+      this.enabled = !this.enabled;
+      writeStorage(STORAGE_KEYS.music, String(this.enabled));
+      if (this.enabled) {
+        sound.init();
+        this.start();
+        sound.play('click', .18, 1.18);
+      } else {
+        sound.play('click', .16, .82);
+        this.stop();
+      }
+      updateMusicButton();
     }
   };
 
@@ -158,8 +270,9 @@
     waveQueue: 0, waveTotal: 0, waveSpawned: 0, waveBossesRemaining: 0,
     waveMatches: 0, totalMatches: 0, waveProfile: null, nextSpawnAt: 0, intermissionUntil: 0,
     attackReadyAt: 0, lastFrame: 0, animationId: 0, lastUiAt: 0, sessionId: 0,
-    combatBuff: null, combatBuffQueue: [], introWasPaused: false
+    combatBuff: null, combatBuffQueue: [], introWasPaused: false, pendingSaveReason: null
   };
+  let pendingResume = null;
 
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const randomType = () => TYPES[Math.floor(Math.random() * TYPES.length)];
@@ -171,6 +284,251 @@
   };
   const indexOf = (row, col) => row * COLS + col;
   const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+  const safeNumber = (value, fallback, minimum = -Infinity, maximum = Infinity) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? clamp(numeric, minimum, maximum) : fallback;
+  };
+
+  function clearSavedProgress() {
+    removeStorage(STORAGE_KEYS.progress);
+    pendingResume = null;
+  }
+
+  function readSavedProgress() {
+    const raw = readStorage(STORAGE_KEYS.progress);
+    if (!raw) return null;
+    try {
+      const save = JSON.parse(raw);
+      const validBoard = Array.isArray(save.board) && save.board.length === ROWS * COLS
+        && save.board.every((type) => TYPES.includes(type));
+      const validRelics = Array.isArray(save.boardRelics) && save.boardRelics.length === ROWS * COLS
+        && save.boardRelics.every((type) => type === null || Boolean(RELICS[type]));
+      if (save.version !== SAVE_VERSION || !DIFFICULTIES[save.difficulty] || !validBoard || !validRelics) throw new Error('Invalid checkpoint');
+      return save;
+    } catch (error) {
+      clearSavedProgress();
+      return null;
+    }
+  }
+
+  function serializeEnemy(enemy, now) {
+    return {
+      id: enemy.id,
+      type: enemy.type,
+      name: enemy.name,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+      speed: enemy.speed,
+      damage: enemy.damage,
+      defense: enemy.defense,
+      relic: enemy.relic,
+      x: enemy.x,
+      y: enemy.y,
+      slowRemaining: Math.max(0, enemy.slowUntil - now),
+      armorBreakRemaining: Math.max(0, enemy.armorBreakUntil - now)
+    };
+  }
+
+  function saveProgress(reason = 'manual') {
+    if (!state.started || state.gameOver) return false;
+    if (state.locked || state.board.some((type) => !TYPES.includes(type))) {
+      state.pendingSaveReason = reason;
+      return false;
+    }
+    const now = performance.now();
+    const save = {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      reason,
+      difficulty: state.difficulty,
+      selectedDifficulty: state.selectedDifficulty,
+      board: [...state.board],
+      boardRelics: [...state.boardRelics],
+      score: state.score,
+      kills: state.kills,
+      wave: state.wave,
+      emberCharges: state.emberCharges,
+      mana: state.mana,
+      repaired: state.repaired,
+      forge: state.forge,
+      forgeTarget: state.forgeTarget,
+      equipment: { ...state.equipment },
+      upgradeMode: state.upgradeMode,
+      autoUpgradeIndex: state.autoUpgradeIndex,
+      wall: state.wall,
+      wallMax: state.wallMax,
+      combo: state.combo,
+      enemyId: state.enemyId,
+      waveQueue: state.waveQueue,
+      waveTotal: state.waveTotal,
+      waveSpawned: state.waveSpawned,
+      waveBossesRemaining: state.waveBossesRemaining,
+      waveMatches: state.waveMatches,
+      totalMatches: state.totalMatches,
+      spawnDelay: Math.max(0, state.nextSpawnAt - now),
+      attackDelay: Math.max(0, state.attackReadyAt - now),
+      intermissionRemaining: state.intermissionUntil ? Math.max(0, state.intermissionUntil - now) : 0,
+      combatBuff: state.combatBuff ? { ...state.combatBuff } : null,
+      combatBuffQueue: state.combatBuffQueue.map((buff) => ({ ...buff })),
+      enemies: state.enemies.map((enemy) => serializeEnemy(enemy, now))
+    };
+    const saved = writeStorage(STORAGE_KEYS.progress, JSON.stringify(save));
+    if (saved) state.pendingSaveReason = null;
+    return saved;
+  }
+
+  function flushPendingSave() {
+    if (!state.pendingSaveReason || state.locked) return;
+    const reason = state.pendingSaveReason;
+    state.pendingSaveReason = null;
+    saveProgress(reason);
+  }
+
+  function clearBattleLayers() {
+    state.enemies.forEach((enemy) => enemy.el?.remove());
+    state.enemies = [];
+    els.projectilesLayer.replaceChildren();
+    els.impactLayer.replaceChildren();
+    els.toastLayer.replaceChildren();
+    els.combatBuffs.replaceChildren();
+    els.combatBuffs.dataset.signature = '';
+    els.boardEffects.replaceChildren();
+    els.battleLog.replaceChildren();
+  }
+
+  function sanitizeBuff(buff) {
+    if (!buff || !RELICS[buff.type]) return null;
+    return { type: buff.type, shots: Math.floor(safeNumber(buff.shots, 1, 1, 99)) };
+  }
+
+  function restoreEnemy(savedEnemy, now) {
+    if (!savedEnemy || !BASE_ENEMY_STATS[savedEnemy.type]) return;
+    const stats = BASE_ENEMY_STATS[savedEnemy.type];
+    const id = Math.floor(safeNumber(savedEnemy.id, state.enemyId + 1, 1, 1000000));
+    const fallbackName = ENEMY_NAMES[savedEnemy.type][(id + state.wave - 2) % ENEMY_NAMES[savedEnemy.type].length];
+    const restoredName = ENEMY_NAMES[savedEnemy.type].includes(savedEnemy.name) ? savedEnemy.name : fallbackName;
+    const maxHp = safeNumber(savedEnemy.maxHp, stats.hp, 1, 100000000);
+    const enemy = {
+      id,
+      type: savedEnemy.type,
+      name: restoredName,
+      role: stats.role,
+      roleIcon: stats.roleIcon,
+      hp: safeNumber(savedEnemy.hp, maxHp, 1, maxHp),
+      maxHp,
+      speed: safeNumber(savedEnemy.speed, stats.speed, .1, 100),
+      damage: Math.round(safeNumber(savedEnemy.damage, stats.damage, 1, 1000000)),
+      defense: Math.round(safeNumber(savedEnemy.defense, stats.defense, 0, 1000000)),
+      label: restoredName,
+      relic: RELICS[savedEnemy.relic] ? savedEnemy.relic : null,
+      slowUntil: now + safeNumber(savedEnemy.slowRemaining, 0, 0, 6000),
+      armorBreakUntil: now + safeNumber(savedEnemy.armorBreakRemaining, 0, 0, 8000),
+      x: safeNumber(savedEnemy.x, 90, 15.1, 110),
+      y: safeNumber(savedEnemy.y, 70, 48, 90)
+    };
+    enemy.el = createEnemyElement(enemy);
+    state.enemies.push(enemy);
+    state.enemyId = Math.max(state.enemyId, enemy.id);
+    positionEnemy(enemy);
+  }
+
+  function showResumePrompt(save) {
+    pendingResume = save;
+    const difficulty = DIFFICULTIES[save.difficulty] || DIFFICULTIES.rookie;
+    const wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
+    $('#resumeDifficulty').textContent = difficulty.name;
+    $('#resumeWave').textContent = `${String(wave).padStart(3, '0')} / ${MAX_WAVES}`;
+    $('#resumeWall').textContent = `${Math.ceil(safeNumber(save.wall, 0, 0))} / ${Math.ceil(safeNumber(save.wallMax, 1120, 1))}`;
+    $('#resumeScore').textContent = String(Math.floor(safeNumber(save.score, 0, 0))).padStart(5, '0');
+    $('#resumeSavedAt').textContent = new Date(safeNumber(save.savedAt, Date.now())).toLocaleString('zh-CN', {
+      month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+    $('#resumeButton span').textContent = `继续第 ${wave} 波`;
+    els.introModal.classList.remove('is-open');
+    els.resumeModal.classList.add('is-open');
+  }
+
+  function restoreProgress(save = pendingResume || readSavedProgress()) {
+    if (!save) return false;
+    cancelAnimationFrame(state.animationId);
+    music.stop();
+    sound.init();
+    state.sessionId += 1;
+    state.selected = null;
+    state.locked = false;
+    state.started = true;
+    state.paused = false;
+    state.gameOver = false;
+    state.pendingSaveReason = null;
+    state.difficulty = DIFFICULTIES[save.difficulty] ? save.difficulty : 'rookie';
+    state.selectedDifficulty = state.difficulty;
+    state.board = [...save.board];
+    state.boardRelics = [...save.boardRelics];
+    state.score = Math.floor(safeNumber(save.score, 0, 0));
+    state.kills = Math.floor(safeNumber(save.kills, 0, 0));
+    state.wave = Math.floor(safeNumber(save.wave, 1, 1, MAX_WAVES));
+    state.emberCharges = Math.floor(safeNumber(save.emberCharges, 0, 0, EMBER_CHARGE_CAP));
+    state.mana = Math.floor(safeNumber(save.mana, 0, 0, 99));
+    state.repaired = Math.floor(safeNumber(save.repaired, 0, 0));
+    state.forge = Math.floor(safeNumber(save.forge, 0, 0, 1000000));
+    state.forgeTarget = Math.floor(safeNumber(save.forgeTarget, FORGE_START, FORGE_START, FORGE_MAX));
+    state.equipment = {
+      weapon: Math.floor(safeNumber(save.equipment?.weapon, 1, 1, 100)),
+      armor: Math.floor(safeNumber(save.equipment?.armor, 1, 1, 100)),
+      charm: Math.floor(safeNumber(save.equipment?.charm, 1, 1, 100))
+    };
+    state.upgradeMode = ['auto', 'weapon', 'armor', 'charm'].includes(save.upgradeMode) ? save.upgradeMode : 'auto';
+    state.autoUpgradeIndex = Math.floor(safeNumber(save.autoUpgradeIndex, 0, 0, 1000000));
+    state.wallMax = Math.floor(safeNumber(save.wallMax, 1120, 1, 100000000));
+    state.wall = safeNumber(save.wall, state.wallMax, 1, state.wallMax);
+    state.combo = Math.floor(safeNumber(save.combo, 1, 1, 999));
+    state.enemyId = Math.floor(safeNumber(save.enemyId, 0, 0, 1000000));
+    state.waveProfile = getWaveProfile(state.wave, state.difficulty);
+    state.waveQueue = Math.floor(safeNumber(save.waveQueue, state.waveProfile.enemyCount, 0, 100000));
+    state.waveTotal = Math.floor(safeNumber(save.waveTotal, state.waveProfile.enemyCount, 1, 100000));
+    state.waveSpawned = Math.floor(safeNumber(save.waveSpawned, 0, 0, state.waveTotal));
+    state.waveBossesRemaining = Math.floor(safeNumber(save.waveBossesRemaining, state.waveProfile.bossCount, 0, 100));
+    state.waveMatches = Math.floor(safeNumber(save.waveMatches, 0, 0, 1000000));
+    state.totalMatches = Math.floor(safeNumber(save.totalMatches, 0, 0, 100000000));
+    state.combatBuff = sanitizeBuff(save.combatBuff);
+    state.combatBuffQueue = Array.isArray(save.combatBuffQueue) ? save.combatBuffQueue.map(sanitizeBuff).filter(Boolean) : [];
+
+    clearBattleLayers();
+    const now = performance.now();
+    (Array.isArray(save.enemies) ? save.enemies : []).forEach((enemy) => restoreEnemy(enemy, now));
+    state.nextSpawnAt = now + safeNumber(save.spawnDelay, 450, 0, 60000);
+    state.attackReadyAt = now + safeNumber(save.attackDelay, 250, 0, 10000);
+    const intermissionRemaining = safeNumber(save.intermissionRemaining, 0, 0, 60000);
+    state.intermissionUntil = intermissionRemaining > 0 ? now + intermissionRemaining : 0;
+    state.lastFrame = now;
+    state.lastUiAt = 0;
+
+    renderBoard(new Set(), -1, 'initial');
+    updateCombo();
+    selectDifficulty(state.difficulty, false);
+    setUpgradeMode(state.upgradeMode, false);
+    els.resumeModal.classList.remove('is-open');
+    els.introModal.classList.remove('is-open', 'is-first-visit');
+    els.gameOverModal.classList.remove('is-open');
+    els.victoryModal.classList.remove('is-open');
+    els.boardLock.classList.remove('is-visible');
+    els.pauseButton.querySelector('span').textContent = 'Ⅱ';
+    els.pauseButton.setAttribute('aria-label', '暂停游戏');
+    addLog(`已恢复第 ${state.wave} 波本地战报，棋盘与前线状态同步完成`);
+    aimTurret(state.enemies.length ? state.enemies.reduce((closest, enemy) => enemy.x < closest.x ? enemy : closest) : null);
+    updateUI();
+    state.animationId = requestAnimationFrame(gameLoop);
+    music.start();
+    pendingResume = null;
+    return true;
+  }
+
+  function discardSavedProgress() {
+    clearSavedProgress();
+    els.resumeModal.classList.remove('is-open');
+    els.introModal.classList.add('is-open', 'is-first-visit');
+    $('#startButton small').textContent = `部署 · ${DIFFICULTIES[state.selectedDifficulty].subtitle}`;
+  }
 
   function getWaveProfile(wave, difficultyKey = state.difficulty) {
     const safeWave = clamp(Math.floor(Number(wave) || 1), 1, MAX_WAVES);
@@ -411,11 +769,13 @@
       if (sessionId !== state.sessionId) return;
       renderBoard();
       state.locked = false;
+      flushPendingSave();
       return;
     }
     await resolveBoard(sessionId);
     if (sessionId !== state.sessionId) return;
     state.locked = false;
+    flushPendingSave();
   }
 
   async function resolveBoard(sessionId) {
@@ -749,6 +1109,14 @@
     els.soundButton.querySelector('span').textContent = sound.muted ? '×' : '♪';
   }
 
+  function updateMusicButton() {
+    els.musicButton.classList.toggle('is-muted', !music.enabled);
+    els.musicButton.classList.toggle('is-active', music.playing);
+    els.musicButton.setAttribute('aria-pressed', String(music.enabled));
+    els.musicButton.setAttribute('aria-label', music.enabled ? '关闭 MIDI 配乐' : '开启 MIDI 配乐');
+    els.musicButton.setAttribute('title', music.enabled ? '关闭 MIDI 配乐' : '开启 MIDI 配乐');
+  }
+
   function upgradeAdvice() {
     if (state.wall / state.wallMax < .58) return '城墙告急 · 建议优先防御';
     const levels = state.equipment;
@@ -856,6 +1224,16 @@
     sound.tone(196, .22, 'triangle', .028);
     sound.tone(294, .28, 'triangle', .032, .15);
     updateUI();
+    saveProgress('wave');
+  }
+
+  function createEnemyElement(enemy) {
+    const el = document.createElement('div');
+    el.className = `enemy ${enemy.type}${enemy.relic ? ` relic-carrier relic-${enemy.relic}` : ''}`;
+    el.dataset.id = enemy.id;
+    el.innerHTML = `<div class="enemy-hp"><span></span></div><span class="enemy-role-mark" aria-hidden="true">${enemy.roleIcon}</span><div class="enemy-body"><i class="horns"></i></div>${enemy.relic ? `<span class="relic-mark" title="携带${RELICS[enemy.relic].name}">${RELICS[enemy.relic].icon}</span>` : ''}<span class="enemy-stats-mini"><b>攻 ${enemy.damage}</b><b>防 ${enemy.defense}</b></span><span class="enemy-label">${enemy.name}</span>`;
+    els.enemiesLayer.appendChild(el);
+    return el;
   }
 
   function spawnEnemy(forcedType = null, forcedRelic) {
@@ -890,12 +1268,7 @@
       relic, slowUntil: 0, armorBreakUntil: 0,
       x: 105 + Math.random() * 4, y: 60 + Math.random() * 23
     };
-    const el = document.createElement('div');
-    el.className = `enemy ${type}${relic ? ` relic-carrier relic-${relic}` : ''}`;
-    el.dataset.id = enemy.id;
-    el.innerHTML = `<div class="enemy-hp"><span></span></div><span class="enemy-role-mark" aria-hidden="true">${stats.roleIcon}</span><div class="enemy-body"><i class="horns"></i></div>${relic ? `<span class="relic-mark" title="携带${RELICS[relic].name}">${RELICS[relic].icon}</span>` : ''}<span class="enemy-stats-mini"><b>攻 ${enemy.damage}</b><b>防 ${enemy.defense}</b></span><span class="enemy-label">${enemy.name}</span>`;
-    enemy.el = el;
-    els.enemiesLayer.appendChild(el);
+    enemy.el = createEnemyElement(enemy);
     state.enemies.push(enemy);
     positionEnemy(enemy);
     state.waveQueue -= 1;
@@ -917,17 +1290,28 @@
     return Math.max(0, Math.round(enemy.defense * (enemy.armorBreakUntil > performance.now() ? .55 : 1)));
   }
 
+  function battlefieldAnchor(selector, fallbackX, fallbackY, container = els.battlefield) {
+    const anchor = $(selector);
+    if (!anchor) return { x: fallbackX, y: fallbackY };
+    const fieldRect = container.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    return {
+      x: anchorRect.left + anchorRect.width / 2 - fieldRect.left,
+      y: anchorRect.top + anchorRect.height / 2 - fieldRect.top
+    };
+  }
+
   function aimTurret(enemy) {
     if (!enemy) {
       els.fortress.style.setProperty('--aim-angle', '-0.08rad');
       return;
     }
     const fieldRect = els.battlefield.getBoundingClientRect();
-    const startX = fieldRect.width * .18;
-    const startY = fieldRect.height * .42;
-    const endX = fieldRect.width * enemy.x / 100;
-    const endY = fieldRect.height * enemy.y / 100 + 25;
-    els.fortress.style.setProperty('--aim-angle', `${Math.atan2(endY - startY, endX - startX)}rad`);
+    const pivot = battlefieldAnchor('.turret-pivot', fieldRect.width * .12, fieldRect.height * .42);
+    const enemyRect = enemy.el.getBoundingClientRect();
+    const endX = enemyRect.left + enemyRect.width / 2 - fieldRect.left;
+    const endY = enemyRect.top + enemyRect.height * .55 - fieldRect.top;
+    els.fortress.style.setProperty('--aim-angle', `${Math.atan2(endY - pivot.y, endX - pivot.x)}rad`);
   }
 
   function fireAt(enemy, now) {
@@ -959,17 +1343,19 @@
 
   function launchProjectile(enemy, damage, crit, now, shotIndex = 0, shotCount = 1, emberCharged = false) {
     sound.tone(690 + shotIndex * 42 + Math.random() * 60, .055, 'sawtooth', .012);
-    const fieldRect = els.battlefield.getBoundingClientRect();
-    const startX = fieldRect.width * .19;
+    const fieldRect = els.projectilesLayer.getBoundingClientRect();
+    const muzzle = battlefieldAnchor('.muzzle-anchor', fieldRect.width * .19, fieldRect.height * .42, els.projectilesLayer);
+    const startX = muzzle.x;
     const fanOffset = (shotIndex - (shotCount - 1) / 2) * 9;
-    const startY = fieldRect.height * .42 + fanOffset;
-    const initialEndX = fieldRect.width * enemy.x / 100;
+    const startY = muzzle.y;
+    const enemyRect = enemy.el.getBoundingClientRect();
+    const initialEndX = enemyRect.left + enemyRect.width / 2 - fieldRect.left;
     const initialDistance = Math.abs(initialEndX - startX);
     const travelTime = Math.min(460, Math.max(160, initialDistance / 1.2));
     const speedScale = enemy.slowUntil > now ? .55 : 1;
-    const predictedX = Math.max(15, enemy.x - enemy.speed * speedScale * travelTime / 1000);
-    const endX = fieldRect.width * predictedX / 100;
-    const endY = fieldRect.height * enemy.y / 100 + 25 + fanOffset * .18;
+    const predictedTravel = fieldRect.width * enemy.speed * speedScale * travelTime / 100000;
+    const endX = Math.max(fieldRect.width * .15, initialEndX - predictedTravel);
+    const endY = enemyRect.top + enemyRect.height * .55 - fieldRect.top + fanOffset * .18;
     const dx = endX - startX;
     const dy = endY - startY;
     const projectile = document.createElement('i');
@@ -1201,21 +1587,29 @@
 
   function togglePause(force) {
     if (!state.started || state.gameOver) return;
-    if (typeof force !== 'boolean') sound.play('click', .16, state.paused ? 1.12 : .88);
+    const manual = typeof force !== 'boolean';
+    if (manual) sound.play('click', .16, state.paused ? 1.12 : .88);
     state.paused = typeof force === 'boolean' ? force : !state.paused;
     els.pauseButton.querySelector('span').textContent = state.paused ? '▶' : 'Ⅱ';
     els.pauseButton.setAttribute('aria-label', state.paused ? '继续游戏' : '暂停游戏');
     els.boardLock.classList.toggle('is-visible', state.paused);
-    if (!state.paused) {
+    if (state.paused) {
+      const saved = saveProgress('pause');
+      music.stop();
+      if (manual && saved) showCombatToast('战报已保存', 'forge', 50, 18);
+    } else {
       state.lastFrame = performance.now();
       state.nextSpawnAt = Math.max(state.nextSpawnAt, performance.now() + 250);
+      music.start();
     }
     updateUI();
   }
 
   function resetGame() {
     cancelAnimationFrame(state.animationId);
+    music.stop();
     sound.init();
+    clearSavedProgress();
     state.sessionId += 1;
     state.selected = null; state.locked = false; state.started = true; state.paused = false; state.gameOver = false;
     state.difficulty = state.selectedDifficulty;
@@ -1225,20 +1619,14 @@
     state.wallMax = 1120; state.wall = 1120; state.combo = 1; state.enemyId = 0;
     state.waveQueue = 0; state.waveTotal = 0; state.waveSpawned = 0; state.waveBossesRemaining = 0;
     state.waveMatches = 0; state.totalMatches = 0; state.waveProfile = null; state.intermissionUntil = 0;
-    state.attackReadyAt = 0; state.lastFrame = performance.now(); state.lastUiAt = 0;
-    state.enemies.forEach((enemy) => enemy.el.remove());
-    state.enemies = [];
-    els.projectilesLayer.replaceChildren();
-    els.impactLayer.replaceChildren();
-    els.toastLayer.replaceChildren();
-    els.combatBuffs.replaceChildren();
-    els.combatBuffs.dataset.signature = '';
-    els.boardEffects.replaceChildren();
+    state.attackReadyAt = 0; state.lastFrame = performance.now(); state.lastUiAt = 0; state.pendingSaveReason = null;
+    clearBattleLayers();
     buildBoard();
     renderBoard(new Set(), -1, 'initial');
     updateCombo();
     els.gameOverModal.classList.remove('is-open');
     els.victoryModal.classList.remove('is-open');
+    els.resumeModal.classList.remove('is-open');
     els.introModal.classList.remove('is-open');
     els.introModal.classList.remove('is-first-visit');
     els.boardLock.classList.remove('is-visible');
@@ -1248,12 +1636,15 @@
     startWave(1);
     updateUI();
     state.animationId = requestAnimationFrame(gameLoop);
+    music.start();
   }
 
   function endGame() {
     state.gameOver = true;
     state.paused = true;
     state.wall = 0;
+    music.stop();
+    clearSavedProgress();
     $('#finalWave').textContent = state.wave;
     $('#finalKills').textContent = state.kills;
     $('#finalScore').textContent = state.score;
@@ -1267,6 +1658,8 @@
   function completeVictory() {
     state.gameOver = true;
     state.paused = true;
+    music.stop();
+    clearSavedProgress();
     state.score += Math.round(10000 * DIFFICULTIES[state.difficulty].scoreScale);
     $('#victoryKills').textContent = state.kills;
     $('#victoryScore').textContent = state.score;
@@ -1279,6 +1672,8 @@
 
   function returnToBriefing() {
     cancelAnimationFrame(state.animationId);
+    music.stop();
+    clearSavedProgress();
     state.sessionId += 1;
     state.started = false;
     state.paused = true;
@@ -1292,6 +1687,7 @@
   function selectDifficulty(key, announce = true) {
     if (!DIFFICULTIES[key]) return;
     state.selectedDifficulty = key;
+    writeStorage(STORAGE_KEYS.difficulty, key);
     document.querySelectorAll('.difficulty-card').forEach((button) => {
       const active = button.dataset.difficulty === key;
       button.classList.toggle('is-selected', active);
@@ -1339,6 +1735,8 @@
     if (tile) handleTile(Number(tile.dataset.index));
   });
   $('#startButton').addEventListener('click', resetGame);
+  $('#resumeButton').addEventListener('click', () => restoreProgress());
+  $('#discardSaveButton').addEventListener('click', discardSavedProgress);
   $('#restartButton').addEventListener('click', resetGame);
   $('#victoryRestartButton').addEventListener('click', returnToBriefing);
   $('#introClose').addEventListener('click', closeCampaignOptions);
@@ -1350,6 +1748,7 @@
     button.addEventListener('click', () => setUpgradeMode(button.dataset.upgrade));
   });
   els.pauseButton.addEventListener('click', () => togglePause());
+  els.musicButton.addEventListener('click', () => music.toggle());
   els.soundButton.addEventListener('click', () => sound.toggle());
   els.fullscreenButton.addEventListener('click', toggleFullscreen);
   els.volleyButton.addEventListener('click', castVolley);
@@ -1362,6 +1761,7 @@
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && state.started && !state.gameOver) togglePause(true);
   });
+  window.addEventListener('pagehide', () => saveProgress('leave'));
 
   if (new URLSearchParams(window.location.search).has('testMode')) {
     window.__runeRampartTest = {
@@ -1380,6 +1780,16 @@
       },
       reinforcementReward(groups = []) {
         return reinforcementReward(groups);
+      },
+      saveProgress(reason = 'test') {
+        saveProgress(reason);
+        return readSavedProgress();
+      },
+      savedProgress() {
+        return readSavedProgress();
+      },
+      musicState() {
+        return { enabled: music.enabled, playing: music.playing };
       },
       grantRelic(type = 'blast') {
         activateRelic(RELICS[type] ? type : 'blast');
@@ -1442,8 +1852,14 @@
         return {
           difficulty: state.difficulty,
           selectedDifficulty: state.selectedDifficulty,
+          started: state.started,
+          paused: state.paused,
           upgradeMode: state.upgradeMode,
           wave: state.wave,
+          score: state.score,
+          kills: state.kills,
+          wall: state.wall,
+          wallMax: state.wallMax,
           waveMatches: state.waveMatches,
           waveProfile: state.waveProfile,
           combatBuff: state.combatBuff ? { ...state.combatBuff } : null,
@@ -1455,18 +1871,26 @@
           forge: state.forge,
           forgeTarget: state.forgeTarget,
           equipment: { ...state.equipment },
+          board: [...state.board],
           enemies: state.enemies.map(({ type, role, relic }) => ({ type, role, relic }))
         };
       }
     };
   }
 
+  const storedDifficulty = readStorage(STORAGE_KEYS.difficulty, 'rookie');
+  const initialDifficulty = DIFFICULTIES[storedDifficulty] ? storedDifficulty : 'rookie';
+  state.selectedDifficulty = initialDifficulty;
+  state.difficulty = initialDifficulty;
   buildBoard();
   renderBoard(new Set(), -1, 'initial');
-  els.introModal.classList.add('is-first-visit');
-  selectDifficulty('rookie', false);
+  selectDifficulty(initialDifficulty, false);
   setUpgradeMode('auto', false);
   updateSoundButton();
+  updateMusicButton();
   updateFullscreenButton();
   updateUI();
+  const savedProgress = readSavedProgress();
+  if (savedProgress) showResumePrompt(savedProgress);
+  else els.introModal.classList.add('is-first-visit');
 })();
