@@ -1,0 +1,49 @@
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #f7f6f3;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(232, 168, 124, 0.12), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 50%, rgba(196, 92, 38, 0.04), transparent);
+}
+
+.prose-cn p {
+  text-indent: 2em;
+}
+
+.prose-cn p + p {
+  margin-top: 1.25em;
+}
+
+.section-num {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s ease-out both;
+}
+
+.delay-1 {
+  animation-delay: 0.1s;
+}
+
+.delay-2 {
+  animation-delay: 0.2s;
+}
+
+.delay-3 {
+  animation-delay: 0.3s;
+}

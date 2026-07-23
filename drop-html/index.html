@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>关于课程、关于我 | AI 全栈编程</title>
+  <meta name="description" content="我是真的想要教会你做项目 —— Justin Course 关于页面" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink: {
+              50: '#f7f6f3',
+              100: '#eeece6',
+              200: '#ddd8cc',
+              300: '#c4bba8',
+              400: '#a89a82',
+              500: '#8f7d64',
+              600: '#6b5d4b',
+              700: '#4a4036',
+              800: '#2e2822',
+              900: '#1a1714',
+            },
+            accent: {
+              DEFAULT: '#c45c26',
+              soft: '#e8a87c',
+              dark: '#9a4519',
+            },
+          },
+          fontFamily: {
+            sans: ['"Noto Sans SC"', 'system-ui', 'sans-serif'],
+            serif: ['"Noto Serif SC"', 'Georgia', 'serif'],
+          },
+          boxShadow: {
+            card: '0 4px 24px -4px rgba(46, 40, 34, 0.08), 0 2px 8px -2px rgba(46, 40, 34, 0.04)',
+            lift: '0 12px 40px -8px rgba(46, 40, 34, 0.14)',
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="font-sans text-ink-800 antialiased">
+  <!-- Nav -->
+  <header class="sticky top-0 z-50 border-b border-ink-200/80 bg-ink-50/85 backdrop-blur-md">
+    <div class="mx-auto flex max-w-3xl items-center justify-between px-5 py-3.5 sm:px-6">
+      <a href="#" class="group flex items-center gap-2.5">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-ink-900 text-sm font-semibold text-ink-50 transition group-hover:bg-accent">
+          J
+        </span>
+        <span class="text-sm font-semibold tracking-tight text-ink-900">Justin Course</span>
+      </a>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <nav class="flex items-center gap-1 text-sm text-ink-600">
+          <a href="#prologue" class="rounded-md px-2.5 py-1.5 transition hover:bg-ink-100 hover:text-ink-900">楔子</a>
+          <a href="#start" class="rounded-md px-2.5 py-1.5 transition hover:bg-ink-100 hover:text-ink-900">开始</a>
+          <a href="#vision" class="rounded-md px-2.5 py-1.5 transition hover:bg-ink-100 hover:text-ink-900">构想</a>
+        </nav>
+        <a
+          href="https://justincourse.com/pricing"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex shrink-0 items-center rounded-full bg-accent px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-accent-dark sm:px-4"
+        >
+          立即购买
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="mx-auto max-w-3xl px-5 pb-10 pt-14 sm:px-6 sm:pt-20">
+      <p class="animate-fade-up text-xs font-medium uppercase tracking-[0.2em] text-accent">About</p>
+      <h1 class="animate-fade-up delay-1 mt-3 font-serif text-3xl font-bold leading-tight tracking-tight text-ink-900 sm:text-4xl md:text-[2.75rem]">
+        关于课程、关于我
+      </h1>
+      <p class="animate-fade-up delay-2 mt-5 max-w-xl text-lg leading-relaxed text-ink-600 sm:text-xl">
+        我是真的想要教会你做项目
+      </p>
+      <div class="animate-fade-up delay-3 mt-8 h-px w-16 bg-accent/60"></div>
+    </section>
+
+    <!-- Featured image -->
+    <section class="mx-auto max-w-3xl px-5 sm:px-6">
+      <figure class="overflow-hidden rounded-2xl shadow-card ring-1 ring-ink-200/60">
+        <img
+          src="https://justincourse.com/images/about/1.webp"
+          alt="楔子"
+          class="aspect-[16/10] w-full object-cover"
+          loading="eager"
+        />
+      </figure>
+    </section>
+
+    <!-- 楔子 -->
+    <section id="prologue" class="mx-auto max-w-3xl scroll-mt-20 px-5 py-14 sm:px-6 sm:py-16">
+      <div class="mb-8 flex items-baseline gap-3">
+        <span class="section-num text-sm font-medium text-accent">01</span>
+        <h2 class="font-serif text-2xl font-semibold text-ink-900 sm:text-[1.75rem]">楔子</h2>
+      </div>
+      <div class="prose-cn space-y-0 text-[1.05rem] leading-[1.85] text-ink-700">
+        <p>
+          我时常回忆自己正经学习编程刚起步的时候，互联网上还没有知识付费这一说，一般来说，学习技术有几个渠道：去培训班交钱学习、在网上找免费资源下载、买书学习。
+        </p>
+        <p>
+          很幸运的是，当时我找到了一套叫做《亚当学院》的免费教程，是一套非常良心的教程，主要是介绍了基于 W3C 标准的前端开发技术（通俗地说就是 div+css、jQuery、css，那时候的 IDE 还是 Notepad++），作者还贴心地建了个 Discord 群供大家交流。
+        </p>
+        <p>
+          当时的我在石油系统上班（关系户），深切体会到自己是不太可能融入到那个体系中成为一个自己从小就讨厌的人，所以打算尽快转行，而与电脑所相关的一切，正是我从中学起就感兴趣的。
+        </p>
+        <p>
+          我的干劲很大，每天上班时，就摸鱼看视频学习、做笔记，下班后，就回家根据所学知识学习写自己的小项目，并且结合 Wordpress，开始接一些商业定制的单子。在免费教程学完之际，我就已经完成了 2 个基于 Wordpress 的商业定制，当我确认这个收入已经超越了上班的工资后，就立刻打报告离职、成为了一个独立开发者（2009 左右），后来创过业、上过班，但一直走在自己喜欢的这条程序员之路上。
+        </p>
+      </div>
+    </section>
+
+    <!-- Image 2 -->
+    <section class="mx-auto max-w-3xl px-5 sm:px-6">
+      <figure class="overflow-hidden rounded-2xl shadow-card ring-1 ring-ink-200/60">
+        <img
+          src="https://justincourse.com/images/about/2.webp"
+          alt="开始"
+          class="aspect-[16/10] w-full object-cover"
+          loading="lazy"
+        />
+      </figure>
+    </section>
+
+    <!-- 开始 -->
+    <section id="start" class="mx-auto max-w-3xl scroll-mt-20 px-5 py-14 sm:px-6 sm:py-16">
+      <div class="mb-8 flex items-baseline gap-3">
+        <span class="section-num text-sm font-medium text-accent">02</span>
+        <h2 class="font-serif text-2xl font-semibold text-ink-900 sm:text-[1.75rem]">开始</h2>
+      </div>
+      <div class="prose-cn space-y-0 text-[1.05rem] leading-[1.85] text-ink-700">
+        <p>
+          很早以前，我在职的时候，也打算出关于 Web 开发的教程，因为在公司内部，本身就包含了新员工培训的部分，Web 这块是由我来负责的。
+        </p>
+        <p>
+          只不过，企业培训不太一样，因为是工作，很多事情可以无限简化，通过任务派发的方式来安排学习，并且企业招聘是有门槛的，所以大家的水平会有一个托底（虽然也会有实习生，但是一般对基本知识的掌握会有一定的要求），授课过程相对于网上公开授课简单很多，并且需要投入的也都是工作时间。并且，我之前一直认为，网上的教材太多了，根本犯不着我来讲课。可是我发现，太多的人被生涩难懂的官方文档、欲言又止的博客文章、以及各种营销型开发教程所坑害，正如同我看见很多人想要移居日本时，只能搜索和查看非常不靠谱的信息时那样。于是我就想，为什么我不录一套系统的 Web 开发教程给大家？让部分朋友少走一点弯路也是好的。
+        </p>
+      </div>
+    </section>
+
+    <!-- Image 3 -->
+    <section class="mx-auto max-w-3xl px-5 sm:px-6">
+      <figure class="overflow-hidden rounded-2xl shadow-card ring-1 ring-ink-200/60">
+        <img
+          src="https://justincourse.com/images/about/3.webp"
+          alt="课程构想"
+          class="aspect-[16/10] w-full object-cover"
+          loading="lazy"
+        />
+      </figure>
+    </section>
+
+    <!-- 课程构想 -->
+    <section id="vision" class="mx-auto max-w-3xl scroll-mt-20 px-5 py-14 sm:px-6 sm:py-16">
+      <div class="mb-8 flex items-baseline gap-3">
+        <span class="section-num text-sm font-medium text-accent">03</span>
+        <h2 class="font-serif text-2xl font-semibold text-ink-900 sm:text-[1.75rem]">课程构想</h2>
+      </div>
+      <ul class="space-y-4">
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">1</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            课程不教你快速赚钱的办法，只教会你工具的选择和使用，因为我相信这才是实实在在能教和学的东西
+          </p>
+        </li>
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">2</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            课程面向的是有一定产品思维、对技术有热情，但是没有编程实践经验，希望通过学习摸到门道少走弯路的人
+          </p>
+        </li>
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">3</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            技术栈由浅入深进行选择，原则是先教大家可以快速出成果的东西，后续再层层加码，拓展一些有意思的实用功能
+          </p>
+        </li>
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">4</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            一定会积极拥抱 AI 辅助开发，但我相信复杂的项目中核心的部分依然需要人的智慧来主导
+          </p>
+        </li>
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">5</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            课程会有主线，那就是开发一个附带 Landing Page 的导航站，并把它逐渐扩展为一个全功能的网站
+          </p>
+        </li>
+        <li class="group flex gap-4 rounded-xl border border-ink-200/80 bg-white/60 p-5 shadow-card transition hover:border-accent/30 hover:shadow-lift">
+          <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-100 text-xs font-semibold text-ink-600 transition group-hover:bg-accent group-hover:text-white">6</span>
+          <p class="text-[1.02rem] leading-relaxed text-ink-700">
+            我们会成为课程相关的开源项目的第一批共同维护者，相应的，是同学、网友、也是朋友
+          </p>
+        </li>
+      </ul>
+    </section>
+
+    <!-- CTA -->
+    <section class="mx-auto max-w-3xl px-5 pb-16 sm:px-6">
+      <div class="relative overflow-hidden rounded-2xl bg-ink-900 px-6 py-10 text-center sm:px-10 sm:py-12">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(196,92,38,0.25),_transparent_60%)]"></div>
+        <div class="relative">
+          <p class="font-serif text-xl font-semibold text-ink-50 sm:text-2xl">
+            一起少走一点弯路
+          </p>
+          <p class="mx-auto mt-3 max-w-md text-sm leading-relaxed text-ink-300">
+            系统学习 Web 开发，用 AI 辅助，用人的智慧主导。从导航站起步，逐步建成全功能网站。
+          </p>
+          <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="https://justincourse.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition hover:bg-accent-dark"
+            >
+              访问原课程站
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+            </a>
+            <a
+              href="https://github.com/justincourses"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 rounded-full border border-ink-600 px-5 py-2.5 text-sm font-medium text-ink-200 transition hover:border-ink-400 hover:text-white"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-ink-200/80 bg-white/40">
+    <div class="mx-auto flex max-w-3xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-ink-500 sm:flex-row sm:px-6">
+      <p>
+        内容参考自
+        <a href="https://justincourse.com/zh-hans/about" target="_blank" rel="noopener noreferrer" class="text-ink-700 underline decoration-ink-300 underline-offset-2 transition hover:text-accent">
+          justincourse.com/about
+        </a>
+      </p>
+      <div class="flex items-center gap-4">
+        <a href="https://x.com/interjc" target="_blank" rel="noopener noreferrer" class="transition hover:text-ink-900">X</a>
+        <a href="https://github.com/justincourses" target="_blank" rel="noopener noreferrer" class="transition hover:text-ink-900">GitHub</a>
+        <a href="https://interjc.net" target="_blank" rel="noopener noreferrer" class="transition hover:text-ink-900">Justin</a>
+      </div>
+    </div>
+    <div class="border-t border-ink-100 py-4 text-center text-xs text-ink-400">
+      版权所有 © 2026
+      <a href="https://interjc.net" target="_blank" rel="noopener noreferrer" class="text-ink-500 hover:text-ink-700">Justin</a>
+      · 本页为学习用途静态复刻
+    </div>
+  </footer>
+</body>
+</html>
