@@ -1,0 +1,17 @@
+{
+  "name": "pelican-coast-ride",
+  "version": "1.0.0",
+  "description": "3D Pelican Coast Ride with Verlet cloth physics, ocean waves, day-night cycle, 5 cameras, 14 achievements, and procedural audio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "CLOUDFLARE_ACCOUNT_ID=ebac04441f46c534986d969580bc7239 wrangler pages dev .",
+    "dev:local": "python3 -m http.server 8788",
+    "deploy": "CLOUDFLARE_ACCOUNT_ID=ebac04441f46c534986d969580bc7239 wrangler pages deploy . --project-name pelican-coast-ride --branch main",
+    "deploy:create": "CLOUDFLARE_ACCOUNT_ID=ebac04441f46c534986d969580bc7239 wrangler pages project create pelican-coast-ride --production-branch main",
+    "preview": "wrangler pages dev ."
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
+  }
+}

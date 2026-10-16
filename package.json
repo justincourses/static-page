@@ -1,0 +1,14 @@
+{
+  "name": "static-page-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix pelican-coast-ride run dev",
+    "dev:local": "npm --prefix pelican-coast-ride run dev:local",
+    "deploy": "npm --prefix pelican-coast-ride run deploy",
+    "dev:pelican": "npm --prefix pelican-coast-ride run dev",
+    "deploy:pelican": "npm --prefix pelican-coast-ride run deploy",
+    "dev:rune": "npm --prefix rune-rampart run dev",
+    "deploy:rune": "npm --prefix rune-rampart run deploy"
+  }
+}

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>鹈鹕海岸骑行 3D | Pelican Coast Ride — 布料围巾 · 昼夜海浪 · 踏频合成音乐</title>
+  <meta name="description" content="戴头盔墨镜、脖子系红围巾的鹈鹕在海岸公路上骑车抓鱼 3D 互动体验。支持 Verlet 布料物理红围巾、Gerstner 海浪与岸边碎浪、黄昏至星空月夜循环、5 种镜头、14 个成就与实时踏频合成音乐。" />
+  <link rel="icon" href="./assets/pelican-hero.jpg" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D WebGL Stage -->
+  <canvas id="stage-canvas" aria-label="鹈鹕海岸公路骑车抓鱼 3D 场景"></canvas>
+
+  <!-- Pelican First-Person POV Aviator Sunglasses Frame Overlay -->
+  <div id="pelican-pov-overlay" class="pov-overlay" aria-hidden="true">
+    <div class="pov-visor-top">🕶️ 鹈鹕第一人称墨镜视角 · 前方长喙张合抓鱼</div>
+  </div>
+
+  <!-- Floating Score & Fish Catch Popups -->
+  <div id="floating-popups" class="floating-popups" aria-live="polite"></div>
+
+  <!-- Achievement Unlock Toast Popup -->
+  <div id="achievement-toast" class="achievement-toast" role="status" aria-live="polite">
+    <div id="toast-icon" class="toast-icon">🏆</div>
+    <div class="toast-text">
+      <strong id="toast-title">成就解锁</strong>
+      <span id="toast-desc">在海岸公路上抓到第 1 条海鱼</span>
+    </div>
+  </div>
+
+  <!-- HUD Interface -->
+  <div class="hud-layer">
+    <!-- Top Header & Telemetry -->
+    <header class="hud-topbar">
+      <div class="brand-card">
+        <img src="./assets/pelican-hero.jpg" alt="戴头盔墨镜系红围巾的骑车鹈鹕" class="brand-avatar" />
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <h1>鹈鹕海岸骑行 3D</h1>
+            <span class="badge-pill">Verlet 布料围巾</span>
+          </div>
+          <div class="autopilot-row">
+            <span id="hud-autopilot-status" class="autopilot-status is-autopilot">
+              🤖 自动巡航追鱼中 · 按 W/A/S/D/空格/T 随时接管
+            </span>
+            <button id="btn-autopilot" type="button" class="mini-btn" title="切换自动驾驶巡航">切换巡航</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Core Stats Strip -->
+      <div class="stats-strip">
+        <div class="stat-box">
+          <span class="stat-label">🐟 渔获 / 连击</span>
+          <div class="stat-value-row">
+            <strong id="hud-fish">0</strong>
+            <span id="hud-combo" class="combo-pill">×1</span>
+          </div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">🏅 得分 / 里程</span>
+          <div class="stat-value-row">
+            <strong id="hud-score">0</strong>
+            <small id="hud-distance">0 m</small>
+          </div>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">🧣 红围巾飘扬度</span>
+          <div class="stat-value-row">
+            <strong id="hud-scarf">78%</strong>
+            <small>布料物理</small>
+          </div>
+        </div>
+        <div class="stat-box sky-box">
+          <div class="sky-header">
+            <span class="stat-label">昼夜循环</span>
+            <strong id="hud-sky-label">🌅 黄昏落日 (Dusk)</strong>
+          </div>
+          <div class="sky-phase-btns" role="group" aria-label="昼夜时段切换">
+            <button type="button" data-sky-phase="auto" class="phase-btn is-active">循环</button>
+            <button type="button" data-sky-phase="dusk" class="phase-btn">黄昏</button>
+            <button type="button" data-sky-phase="twilight" class="phase-btn">暮色</button>
+            <button type="button" data-sky-phase="night" class="phase-btn">星空月夜</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Right Controls: Achievements, Audio, Adaptive Quality -->
+      <div class="utility-bar">
+        <button id="btn-achievements" type="button" class="util-btn ach-trigger-btn">
+          <span>🏆 成就</span>
+          <strong id="hud-ach-count">0 / 14</strong>
+        </button>
+        <button id="btn-music" type="button" class="util-btn is-active">🎵 音乐 96 BPM</button>
+        <button id="btn-sfx" type="button" class="util-btn is-active">🔊 音效开</button>
+        <div class="quality-box">
+          <label for="quality-select" class="sr-only">画质模式</label>
+          <select id="quality-select" class="quality-select" title="按帧率自适应画质或手动锁定">
+            <option value="auto" selected>画质：按帧率自适应</option>
+            <option value="ultra">画质：极致 (Ultra)</option>
+            <option value="high">画质：高画质 (High)</option>
+            <option value="medium">画质：均衡 (Medium)</option>
+            <option value="low">画质：流畅 (Low)</option>
+          </select>
+          <span id="hud-fps" class="fps-readout">60 FPS · 自适应 (高画质)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Bottom HUD: Touch Controls + Speed/Cadence + 5 Camera Switcher -->
+    <footer class="hud-bottom">
+      <!-- Left Touch Control Cluster (W/S 加减速, A/D 变道抓鱼) -->
+      <div class="touch-cluster touch-left" aria-label="骑行方向与加减速触屏控制">
+        <div class="touch-dpad">
+          <button id="touch-accel" type="button" class="touch-btn touch-up">
+            <span class="key-hint">W</span>
+            <strong>加速</strong>
+          </button>
+          <div class="touch-mid-row">
+            <button id="touch-left" type="button" class="touch-btn touch-side">
+              <span class="key-hint">A</span>
+              <strong>左变道</strong>
+            </button>
+            <button id="touch-right" type="button" class="touch-btn touch-side">
+              <span class="key-hint">D</span>
+              <strong>右变道</strong>
+            </button>
+          </div>
+          <button id="touch-brake" type="button" class="touch-btn touch-down">
+            <span class="key-hint">S</span>
+            <strong>减速</strong>
+          </button>
+        </div>
+      </div>
+
+      <!-- Center Dashboard: Speedometer, Cadence-Synced Music Telemetry & 5 Cameras -->
+      <div class="center-console">
+        <div class="telemetry-bar">
+          <div class="speed-gauge">
+            <strong id="hud-speed">36</strong>
+            <span>km/h 骑行时速</span>
+          </div>
+          <div class="cadence-divider"></div>
+          <div class="cadence-gauge">
+            <div><strong id="hud-cadence">82 RPM</strong> <span>踏频</span></div>
+            <div class="bpm-sub">节奏同步：<span id="hud-bpm">96 BPM</span></div>
+          </div>
+          <div class="cadence-divider"></div>
+          <div class="camera-meta">
+            <strong id="hud-camera-name">🎥 追尾视角</strong>
+            <span id="hud-camera-desc">经典第三人称动态追随镜头</span>
+          </div>
+        </div>
+
+        <!-- 5 Camera Mode Buttons -->
+        <nav class="camera-switcher" aria-label="5 种镜头切换">
+          <button type="button" data-camera-index="0" class="cam-btn is-active">
+            <span class="cam-key">1</span> 追尾视角
+          </button>
+          <button type="button" data-camera-index="1" class="cam-btn">
+            <span class="cam-key">2</span> 电影运镜
+          </button>
+          <button type="button" data-camera-index="2" class="cam-btn">
+            <span class="cam-key">3</span> 鹈鹕视角
+          </button>
+          <button type="button" data-camera-index="3" class="cam-btn">
+            <span class="cam-key">4</span> 海岸侧拍
+          </button>
+          <button type="button" data-camera-index="4" class="cam-btn">
+            <span class="cam-key">5</span> 高空航拍
+          </button>
+        </nav>
+      </div>
+
+      <!-- Right Touch Action Cluster (空格跳跃, T 展翅抬前轮, C 切镜头) -->
+      <div class="touch-cluster touch-right" aria-label="跳跃与展翅抬前轮特技触屏控制">
+        <button id="touch-jump" type="button" class="touch-btn touch-action jump-btn">
+          <span class="key-hint">SPACE</span>
+          <strong>跳跃抓飞鱼</strong>
+        </button>
+        <button id="touch-wheelie" type="button" class="touch-btn touch-action wheelie-btn">
+          <span class="key-hint">T</span>
+          <strong>展翅抬前轮</strong>
+        </button>
+        <button id="touch-camera" type="button" class="touch-btn touch-action cam-cycle-btn">
+          <span class="key-hint">C</span>
+          <strong>切换镜头</strong>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 14 Achievements Modal Drawer -->
+  <div id="achievement-drawer" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="ach-modal-title">
+    <div class="modal-panel">
+      <div class="modal-hero">
+        <img src="./assets/pelican-hero.jpg" alt="鹈鹕海岸骑行定妆照" class="modal-hero-img" />
+        <div class="modal-hero-overlay">
+          <div>
+            <span class="modal-kicker">COASTAL PELICAN TROPHIES</span>
+            <h2 id="ach-modal-title">🏆 海岸骑行 14 项全成就图鉴</h2>
+            <p>W/S 加减速 · A/D 变道抓鱼 · 空格跳跃抓高空飞鱼 · T 展翅抬前轮 · 1-5/C 切换五种镜头</p>
+          </div>
+          <button id="btn-close-achievements" type="button" class="close-modal-btn" aria-label="关闭成就面板">✕ 关闭</button>
+        </div>
+      </div>
+      <div id="achievement-grid" class="achievement-grid"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
